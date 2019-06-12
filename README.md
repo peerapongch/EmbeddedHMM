@@ -14,4 +14,4 @@ be known.
 
 A.Y. Shestopaloff and R. M. Neal (2017). Sampling latent states for high-dimensional nonlinear state space models with the embedded HMM method. Bayesian Analysis.
 
-*** Scripts/ files here show progress so far. They are intended to be modified and re-structured into a package once tested
+Please refer to cases/case_xxx/ for specific use cases for the package. In particular, Models 1 and 2 as referenced by the abovementioned paper.
