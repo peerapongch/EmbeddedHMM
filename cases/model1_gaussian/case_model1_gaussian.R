@@ -1,6 +1,7 @@
-source('function_model1_gaussian.R')
-source('function_mhmcmc_model1_gaussian.R')
-source('function_kalman.R')
+# assuming the current working directory is at current file path 
+source('../../models/model1_generate.R')
+source('../../samplers/model1_mhmcmc.R')
+source('../../samplers/model1_kalman.R')
 
 # model 1 specification and simulation
 T <- 250
@@ -22,9 +23,9 @@ delta <- 0.6; dim <- dim; deltas <- rep(delta,dim)
 
 F <- diag(phis); G <- t(chol(sigma)); R <- diag(1,dim); Q <- diag(1,dim); H <- diag(deltas)
 ssm <- generateGaussianGaussianSSM(T,dim,mu_init,sigma_init,F,G,Q,H,R)
-save(ssm,file='./data/ssm_gaussiangaussian_1.RData')
+save(ssm,file='./data/ssm_model1_gaussian_1.RData')
 
-# load('./data/ssm_gaussiangaussian_1.RData')
+# load('./data/ssm_model1_gaussian_1.RData')
 
 ### Kalman filtering ### 
 kfks <- KFKS(ssm)
@@ -41,7 +42,7 @@ for(j in 1:ssm$dim){
     mci_mu[i,j] <- mean(X_mcmc[,i,j])
   }
 }
-plot_compare <- function(d,ssm,kfks,mcmc,mci_mu){
+plot_compare_gaussian <- function(d,ssm,kfks,mcmc,mci_mu){
   X_mcmc <- mcmc$X_mcmc
   plot(X_mcmc[1,,d],type='l',col='grey',ylim=c(-6,7),ylab=paste('X_',d,sep=''),xlab='t',main='Comparison of Posterior smoothing means')
   for(i in 2:N){
@@ -54,6 +55,6 @@ plot_compare <- function(d,ssm,kfks,mcmc,mci_mu){
          col=c('black','red','blue'), lty=c(1,1,1),cex=0.8)
 }
 ### dim 
-plot_compare(1,ssm,kfks,mcmc,mci_mu)
-plot_compare(2,ssm,kfks,mcmc,mci_mu)
-plot_compare(3,ssm,kfks,mcmc,mci_mu)
+for(i in 1:dim){
+  plot_compare_gaussian(i,ssm,kfks,mcmc,mci_mu)
+}

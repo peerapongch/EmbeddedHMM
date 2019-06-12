@@ -1,0 +1,7 @@
+Yep, samplers.
+
+Model 'specific' samplers
+- Model 1 Gaussian
+- Model 1 Poisson 
+- Model 2 
+- General DLM (later)

@@ -1,0 +1,3 @@
+Data shared globally.
+
+Refer to ../cases/case_xxx/data for use case-specific data.
