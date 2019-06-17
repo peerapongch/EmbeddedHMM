@@ -25,14 +25,16 @@ F <- diag(phis); G <- t(chol(sigma)); R <- diag(1,dim); Q <- diag(1,dim); H <- d
 ssm <- generateGaussianGaussianSSM(T,dim,mu_init,sigma_init,F,G,Q,H,R)
 save(ssm,file='./data/ssm_model1_gaussian_1.RData')
 
-# load('./data/ssm_model1_gaussian_1.RData')
+load('./data/ssm_model1_gaussian_1.RData')
 
 ### Kalman filtering ### 
 kfks <- KFKS(ssm)
 
 ### MHMCMC with autoregressive proposal ### 
-N <- 1000; e <- 0.5
-mcmc <- mcmcGaussianGaussianSSM(N,e,ssm)
+N <- 1000; e <- c(0.2,0.8)
+system.time(
+  mcmc <- mcmcGaussianSSM(N,es,ssm)  
+)
 X_mcmc <- mcmc$X_mcmc
 
 ### plot diagnostics ### 

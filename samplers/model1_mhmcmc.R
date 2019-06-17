@@ -116,7 +116,7 @@ mcmcPoissonGaussianSSM<- function(N,e,ssm){
   return(list(X_mcmc=X_mcmc,N=N,e=e))
 }
 
-mcmcGaussianSSM<- function(N,e,ssm,obs='Gaussian',init=NULL){
+mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL){
   require(MASS)
   # autoregressive proposal
   stopifnot((obs=='Gaussian')|(obs=='Poisson'))
@@ -167,6 +167,7 @@ mcmcGaussianSSM<- function(N,e,ssm,obs='Gaussian',init=NULL){
       
       # autoregressive update
       z <- mvrnorm(1,rep(0,dim),diag(1,dim))
+      e <- es[i%%length(es)+1] # alternate
       x_j <- mu_j+sqrt(1-e^2)*(X_mcmc[i-1,j,]-mu_j)+e*L%*%z
       # transition probability
 

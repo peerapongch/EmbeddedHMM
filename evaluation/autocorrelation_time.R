@@ -1,0 +1,41 @@
+ACTime <- function(mcmcs,T,dim,lag.max,tps){
+  # print(tps)
+  # calculate overall mean 
+  overall_mean <- matrix(0,nrow=T,ncol=dim)
+  N <- mcmcs[[1]]$N
+  remove <- round(N*0.1)
+  N <- N-remove # reassign N  
+  divisor <- N*length(mcmcs)
+  for(t in 1:T){
+    for(j in 1:dim){
+      sum <- 0
+      for(i in 1:length(mcmcs)){
+        sum <- sum + sum(mcmcs[[i]]$X_mcmc[-(1:remove),t,j])
+      }
+      overall_mean[t,j] <- sum/divisor
+    }
+  }
+  
+  # calculate autocorrelation time
+  ac_time <- array(0,dim=c(length(mcmcs),T,dim))
+  pb <- txtProgressBar(min=0,max=length(mcmcs)*T*dim,style=3); prog <- 0
+  for(i in 1:length(mcmcs)){
+    X_mcmc <- mcmcs[[i]]$X_mcmc
+    for(t in 1:T){
+      for(j in 1:dim){
+        setTxtProgressBar(pb, prog)
+        prog <- prog + 1
+        # calculate autocorrelation 
+        chain <- X_mcmc[-(1:remove),t,j] - overall_mean[t,j]
+        acfs <- acf(chain,demean=FALSE,lag.max=min(lag.max,length(chain)),type='correlation',plot=FALSE)
+        rho_sum <- sum(acfs$acf)
+        # adjust for time
+        ac_time[i,t,j] <- (1+2*rho_sum)*tps
+        # print(ac_time[i,t,j])
+      }
+    }
+  } 
+  close(pb)
+  return(ac_time)
+  # return(list(ac_time=ac_time,overall_mean=overall_mean))
+}
