@@ -23,7 +23,9 @@ save(ssm_poisson,file='./data/ssm_model1_poisson_1.RData')
 
 ### MHMCMC with autoregressive update ###
 N <- 1000; es <- c(0.2,0.8)
-mcmc <- mcmcGaussianSSM(N,es,ssm_poisson,obs='Poisson')
+system.time(
+  mcmc <- mcmcGaussianSSM(N,es,ssm_poisson,obs='Poisson') 
+)
 # profvis(mcmcPoissonGaussianSSM(2,0.5,ssm_poisson))
 X_mcmc <- mcmc$X_mcmc
 

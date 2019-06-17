@@ -121,7 +121,7 @@ mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL){
   # autoregressive proposal
   stopifnot((obs=='Gaussian')|(obs=='Poisson'))
   if(obs=='Gaussian'){
-    require(mvtnorm)
+    require(Rfast)
     H <- ssm$H; R <- ssm$R; Q <- ssm$Q
   } else if(obs=='Poisson'){
     c <- ssm$c; delta <- ssm$delta
