@@ -19,11 +19,12 @@ delta <- rep(0.6,dim); c <- rep(-0.4,dim); F <- diag(phis); G <- t(chol(sigma));
 ssm_poisson <- generatePoissonGaussianSSM(T,dim,mu_init,sigma_init,F,G,Q,c,delta)
 # plot(ssm_poisson$Y[,1],type='l')
 save(ssm_poisson,file='./data/ssm_model1_poisson_1.RData')
-# load('./data/ssm_model1_poisson_1.R')
+# load('./data/ssm_model1_poisson_1.RData')
 
 ### MHMCMC with autoregressive update ###
 N <- 1000; e <- 0.5
 mcmc <- mcmcPoissonGaussianSSM(N,e,ssm_poisson)
+# profvis(mcmcPoissonGaussianSSM(2,0.5,ssm_poisson))
 X_mcmc <- mcmc$X_mcmc
 
 ### MCI mu ###
@@ -52,6 +53,22 @@ plot_compare_poisson <- function(d,ssm,mcmc,mci_mu,plot.samples=FALSE,interval=1
          col=c('black','blue'), lty=c(1,1),cex=0.8)
 }
 
+par(mfrow=c(1,1))
 for(i in 1:dim){
   plot_compare_poisson(i,ssm_poisson,mcmc,mci_mu,plot.samples=TRUE) 
+  # plot(ssm_poisson$Y[,i],type='l')
 }
+
+# plot the observations
+plot(ssm_poisson$Y[,1],type='l')
+plot(ssm_poisson$Y[,2],type='l')
+plot(ssm_poisson$Y[,3],type='l')
+
+# correlation? visualise the samples 
+library(MCMCpack)
+x <- X_mcmc[,1:3,1]
+length(unique(x[,1]))/length(x[,1])
+length(unique(x[,2]))/length(x[,2])
+length(unique(x[,3]))/length(x[,3])
+x <- as.mcmc(x)
+plot(x)
