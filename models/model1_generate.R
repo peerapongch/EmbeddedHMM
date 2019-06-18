@@ -32,7 +32,11 @@ generatePoissonGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,c,delta){
   # call the above two functions 
   X <- generateLatent_Gaussian(T,dim,mu_init,sigma_init,F,G,Q)
   Y <- generateObservation_Poisson(T,dim,X$X,c,delta)
-  return(list(dim=dim,T=T,x0=X$x0,X=X$X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,F=F,G=G,Q=Q,c=c,delta=delta))
+  sigma <- G %*% Q %*% t(G)
+  sigma_U <- chol(sigma)
+  sigma_L <- t(sigma_U)
+  return(list(dim=dim,T=T,x0=X$x0,X=X$X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,
+              F=F,G=G,Q=Q,c=c,delta=delta,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L))
 }
 
 generateObservation_Gaussian <- function(T,X,H,R){
@@ -45,7 +49,8 @@ generateGaussianGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,H,R){
   require(MASS)
   # init
   sigma <- G %*% Q %*% t(G)
-  
+  sigma_U <- chol(sigma)
+  sigma_L <- t(sigma_U)
   # begin
   x0 <- mvrnorm(1,mu_init,sigma_init)
   X <- matrix(0,ncol=dim,nrow=T)
@@ -62,5 +67,6 @@ generateGaussianGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,H,R){
     Y[t,] <- mvrnorm(1, H %*% X[t,], R)
   }
   
-  return(list(dim=dim,T=T,x0=x0,X=X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,F=F,G=G,Q=Q,H=H,R=R))
+  return(list(dim=dim,T=T,x0=x0,X=X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,
+              F=F,G=G,Q=Q,H=H,R=R,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L))
 }
