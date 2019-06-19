@@ -9,10 +9,13 @@ ACTime <- function(mcmcs,T,dim,lag.max,tps){
   for(t in 1:T){
     for(j in 1:dim){
       sums <- lapply(mcmcs,FUN=function(x){sum(x$X_sample[-(1:remove),t,j])})
+      # sums <- 0 
       # for(i in 1:length(mcmcs)){
-      #   sum <- sum + sum(mcmcs[[i]]$X_sample[-(1:remove),t,j])
+      #   sums <- sums + sum(mcmcs[[i]]$X_sample[-(1:remove),t,j])
       # }
       overall_mean[t,j] <- sum(as.numeric(as.character(sums)))/divisor
+      # overall_mean[t,j] <- sum(sums)/divisor
+      # print(overall_mean[t,j])
     }
   }
   
@@ -31,11 +34,11 @@ ACTime <- function(mcmcs,T,dim,lag.max,tps){
         rho_sum <- sum(acfs$acf)
         # adjust for time
         ac_time[i,t,j] <- (1+2*rho_sum)*tps
-        # print(ac_time[i,t,j])
+        print(rho_sum)
       }
     }
   } 
   close(pb)
-  return(ac_time)
-  # return(list(ac_time=ac_time,overall_mean=overall_mean))
+  # return(ac_time)
+  return(list(ac_time=ac_time,overall_mean=overall_mean))
 }

@@ -1,0 +1,54 @@
+load('./data/model1_poisson1.RData')
+load('./data/model1_poisson1_env.RData')
+source('../../samplers/model1_mhmcmc.R')
+
+### MHMCMC with autoregressive update ###
+N <- 1000000; es <- c(0.2,0.8)
+system.time(
+  mcmc <- mcmcGaussianSSM(N,es,ssm_poisson,obs='Poisson') 
+)
+
+save(mcmc,file='./data/model1_poisson1_mcmc_N10e6.RData')
+
+X_mcmc <- mcmc$X_sample
+### MCI mu ###
+mci_mu <- matrix(0,nrow=ssm_poisson$T,ncol=ssm_poisson$dim)
+for(j in 1:ssm_poisson$dim){
+  for(i in 1:ssm_poisson$T){
+    mci_mu[i,j] <- mean(X_mcmc[,i,j])
+  }
+}
+
+### diagnostic (compare with actual latent states) ###
+plot_compare_poisson <- function(d,ssm,mcmc,mci_mu,plot.samples=FALSE,interval=10){
+  N <- mcmc$N
+  thin <- mcmc$thin.factor
+  totalN <- N/thin
+  X_mcmc <- mcmc$X_sample
+  plot(mci_mu[,d],col='black',type='l',ylim=c(-10,10),ylab=paste('X_',d,sep=''),xlab='t',
+       main='Comparison of Posterior smoothing means')
+  if(plot.samples){
+    for(i in seq(1,totalN,interval)){
+      lines(X_mcmc[i,,d],col='grey')
+    }
+    lines(mci_mu[,d],col='black')
+  }
+  lines(ssm$X[,d],type='l',col='blue')
+  legend(0,10,legend=c('MHMCMC post. mean','Latent state (truth)'),
+         col=c('black','blue'), lty=c(1,1),cex=0.8)
+}
+
+par(mfrow=c(1,1))
+for(i in 1:dim){
+  plot_compare_poisson(i,ssm_poisson,mcmc,mci_mu,plot.samples=TRUE,interval=100) 
+  # plot(ssm_poisson$Y[,i],type='l')
+}
+
+# correlation? visualise the samples 
+library(MCMCpack)
+x <- X_mcmc[,1:3,1]
+length(unique(x[,1]))/length(x[,1])
+length(unique(x[,2]))/length(x[,2])
+length(unique(x[,3]))/length(x[,3])
+x <- as.mcmc(x)
+plot(x)

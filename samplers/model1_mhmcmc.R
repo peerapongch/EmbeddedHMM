@@ -1,122 +1,4 @@
-# mcmcGaussianGaussianSSM<- function(N,e,ssm){
-#   # autoregressive proposal
-#   require(mvtnorm)
-#   # extract ssm values
-#   F <- ssm$F; T <- ssm$T; H <- ssm$H; R <- ssm$R; Q <- ssm$Q
-#   mu_init <- ssm$mu_init; sigma_init <- ssm$sigma_init
-#   sigma <- ssm$G %*% ssm$Q %*% t(ssm$G)
-#   dim <- ssm$dim; Y <- ssm$Y
-#   
-#   pre_mu_1 <- solve(F %*% F + solve(sigma_init)%*%sigma) %*% F
-#   sigma_1 <- solve(F %*% (solve(sigma) %*% F) + solve(sigma_init))
-#   pre_mu_j <- solve(F %*% F + diag(1,dim(F)[1])) %*% F
-#   sigma_j <- solve(F %*% (solve(sigma) %*% F) + solve(sigma))
-#   pre_mu_T <- F; sigma_T <- sigma
-#   
-#   ##### MHMCMC autoregressive ######
-#   # N <- 1000; e <- 0.5 # ranges from -1 to 1 
-#   X_mcmc <- array(0,dim=c(N,T,dim))
-#   X_mcmc[1,,] <- mvrnorm(T,mu_init,sigma_init)
-#   pb <- txtProgressBar(min=0,max=N,title="MH-MCMC",style=3)
-#   for(i in 2:N){
-#     # print(paste('progress: ',i/N*100,'%',sep=''))
-#     setTxtProgressBar(pb, i)
-#     for(j in 1:T){
-#       # find the mu 
-#       if(j==1) {
-#         mu_j <- pre_mu_1 %*% X_mcmc[i-1,2,]
-#         L <- t(chol(sigma_1))
-#       } else if(j==T) {
-#         mu_j <- pre_mu_T %*% X_mcmc[i-1,T-1,]
-#         L <- t(chol(sigma_T))
-#       } else {
-#         mu_j <- pre_mu_j %*% (X_mcmc[i,j-1,]+X_mcmc[i-1,j+1,])
-#         L <- t(chol(sigma_j))
-#       }
-#       
-#       # autoregressive update
-#       z <- mvrnorm(1,rep(0,dim),diag(1,dim))
-#       x_j <- mu_j+sqrt(1-e^2)*(X_mcmc[i-1,j,]-mu_j)+e*L%*%z
-#       
-#       # transition probability
-#       hastings <- dmvnorm(Y[j,],H %*% x_j, R)/dmvnorm(Y[j,],H %*% X_mcmc[i-1,j,], R)
-#       alpha <- min(1,hastings)
-#       U <- runif(1,0,1)
-#       if(alpha>U){
-#         X_mcmc[i,j,] <- x_j
-#       } else {
-#         X_mcmc[i,j,] <- X_mcmc[i-1,j,]
-#       }
-#     }
-#   }
-#   close(pb)
-#   return(list(X_mcmc=X_mcmc,N=N,e=e))
-# }
-# 
-# mcmcPoissonGaussianSSM<- function(N,e,ssm){
-#   # autoregressive proposal
-#   require(mvtnorm)
-#   # extract ssm values
-#   F <- ssm$F; T <- ssm$T; Q <- ssm$Q
-#   mu_init <- ssm$mu_init; sigma_init <- ssm$sigma_init
-#   sigma <- ssm$G %*% ssm$Q %*% t(ssm$G)
-#   dim <- ssm$dim; Y <- ssm$Y
-#   
-#   # difference here 
-#   c <- ssm$c; delta <- ssm$delta
-#   
-#   pre_mu_1 <- solve(F %*% F + solve(sigma_init)%*%sigma) %*% F
-#   sigma_1 <- solve(F %*% (solve(sigma) %*% F) + solve(sigma_init))
-#   pre_mu_j <- solve(F %*% F + diag(1,dim(F)[1])) %*% F
-#   sigma_j <- solve(F %*% (solve(sigma) %*% F) + solve(sigma))
-#   pre_mu_T <- F; sigma_T <- sigma
-#   
-#   ##### MHMCMC autoregressive ######
-#   # N <- 1000; e <- 0.5 # ranges from -1 to 1 
-#   X_mcmc <- array(0,dim=c(N,T,dim))
-#   X_mcmc[1,,] <- mvrnorm(T,mu_init,sigma_init)
-#   pb <- txtProgressBar(min=0,max=N,title="MH-MCMC",style=3)
-#   for(i in 2:N){
-#     # print(paste('progress: ',i/N*100,'%',sep=''))
-#     setTxtProgressBar(pb, i)
-#     for(j in 1:T){
-#       # find the mu 
-#       if(j==1) {
-#         mu_j <- pre_mu_1 %*% X_mcmc[i-1,2,]
-#         L <- t(chol(sigma_1))
-#       } else if(j==T) {
-#         mu_j <- pre_mu_T %*% X_mcmc[i-1,T-1,]
-#         L <- t(chol(sigma_T))
-#       } else {
-#         mu_j <- pre_mu_j %*% (X_mcmc[i,j-1,]+X_mcmc[i-1,j+1,])
-#         L <- t(chol(sigma_j))
-#       }
-#       
-#       # autoregressive update
-#       z <- mvrnorm(1,rep(0,dim),diag(1,dim))
-#       x_j <- mu_j+sqrt(1-e^2)*(X_mcmc[i-1,j,]-mu_j)+e*L%*%z
-#       # transition probability
-#       # hastings <- dmvnorm(Y[j,],H %*% x_j, R)/dmvnorm(Y[j,],H %*% X_mcmc[i-1,j,], R)
-#       lhastings <- 0
-#       for(p in 1:dim){
-#         num <- dpois(Y[j,p],exp(c[p]+delta[p]*x_j[p]),log=TRUE)
-#         denom <- dpois(Y[j,p],exp(c[p]+delta[p]*X_mcmc[i-1,j,p]),log=TRUE)
-#         lhastings <- lhastings + num - denom
-#       }
-#       alpha <- min(1,exp(lhastings))
-#       U <- runif(1,0,1)
-#       if(alpha>U){
-#         X_mcmc[i,j,] <- x_j
-#       } else {
-#         X_mcmc[i,j,] <- X_mcmc[i-1,j,]
-#       }
-#     }
-#   }
-#   close(pb)
-#   return(list(X_mcmc=X_mcmc,N=N,e=e))
-# }
-
-mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL){
+mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL,thin.factor=10,seed=NULL){
   require(MASS)
   # autoregressive proposal
   stopifnot((obs=='Gaussian')|(obs=='Poisson'))
@@ -138,61 +20,74 @@ mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL){
   sigma_1 <- solve(F %*% (solve(sigma) %*% F) + solve(sigma_init))
   pre_mu_j <- solve(F %*% F + diag(1,dim(F)[1])) %*% F
   sigma_j <- solve(F %*% (solve(sigma) %*% F) + solve(sigma))
-  pre_mu_T <- F; sigma_T <- sigma
+  pre_mu_T <- F
+  sigma_T <- sigma
+  
+  sigma_1_L <- t(chol(sigma_1))
+  sigma_j_L <- t(chol(sigma_j))
+  sigma_T_L <- t(chol(sigma_T))
   
   ##### MHMCMC autoregressive ######
-  # N <- 1000; e <- 0.5 # ranges from -1 to 1 
-  X_sample <- array(0,dim=c(N,T,dim))
+  X_sample <- array(0,dim=c(N/thin.factor,T,dim))
   if(is.null(init)){
+    if(!is.null(seed)){
+      set.seed(seed)
+    }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init) 
   } else {
     X_sample[1,,] <- init
   }
+  X_current <- X_sample[1,,]
   pb <- txtProgressBar(min=0,max=N,title="MH-MCMC",style=3)
   for(i in 2:N){
     # print(paste('progress: ',i/N*100,'%',sep=''))
     setTxtProgressBar(pb, i)
+    U <- runif(T)
     for(j in 1:T){
       # find the mu 
       if(j==1) {
-        mu_j <- pre_mu_1 %*% X_sample[i-1,2,]
-        L <- t(chol(sigma_1))
+        # mu_j <- pre_mu_1 %*% X_sample[i-1,2,]
+        mu_j <- pre_mu_1 %*% X_current[2,]
+        L <- sigma_1_L
       } else if(j==T) {
-        mu_j <- pre_mu_T %*% X_sample[i-1,T-1,]
-        L <- t(chol(sigma_T))
+        mu_j <- pre_mu_T %*% X_current[T-1,]
+        L <- sigma_T_L
       } else {
-        mu_j <- pre_mu_j %*% (X_sample[i,j-1,]+X_sample[i-1,j+1,])
-        L <- t(chol(sigma_j))
+        # mu_j <- pre_mu_j %*% (X_sample[i,j-1,]+X_sample[i-1,j+1,])
+        mu_j <- pre_mu_j %*% (X_current[j-1,]+X_current[j+1,])
+        L <- sigma_j_L
       }
       
       # autoregressive update
-      z <- mvrnorm(1,rep(0,dim),diag(1,dim))
+      z <- rnorm(dim)
       e <- es[i%%length(es)+1] # alternate
-      x_j <- mu_j+sqrt(1-e^2)*(X_sample[i-1,j,]-mu_j)+e*L%*%z
+      # x_j <- mu_j+sqrt(1-e^2)*(X_sample[i-1,j,]-mu_j)+e*L%*%z
+      x_j <- mu_j+sqrt(1-e^2)*(X_current[j,]-mu_j)+e*L%*%z
       # transition probability
       
       if(obs=='Gaussian'){
-        hastings <- dmvnorm(Y[j,],H %*% x_j, R)/dmvnorm(Y[j,],H %*% X_sample[i-1,j,], R)
+        # hastings <- dmvnorm(Y[j,],H %*% x_j, R)/dmvnorm(Y[j,],H %*% X_sample[i-1,j,], R)
+        hastings <- dmvnorm(Y[j,],H %*% x_j, R)/dmvnorm(Y[j,],H %*% X_current[j,], R)
       } else if(obs=='Poisson'){
-        lhastings <- 0
-        for(p in 1:dim){
-          num <- dpois(Y[j,p],exp(c[p]+delta[p]*x_j[p]),log=TRUE)
-          denom <- dpois(Y[j,p],exp(c[p]+delta[p]*X_sample[i-1,j,p]),log=TRUE)
-          lhastings <- lhastings + num - denom
-        }
+        # vectorised version
+        lnum <- sum(dpois(Y[j,],exp(c+delta*x_j),log=TRUE))
+        # ldenom <- sum(dpois(Y[j,],exp(c+delta*X_sample[i-1,j,]),log=TRUE))
+        ldenom <- sum(dpois(Y[j,],exp(c+delta*X_current[j,]),log=TRUE))
+        lhastings <- lnum - ldenom
         hastings = exp(lhastings)
       }
       
       alpha <- min(1,hastings)
-      U <- runif(1,0,1)
-      if(alpha>U){
-        X_sample[i,j,] <- x_j
-      } else {
-        X_sample[i,j,] <- X_sample[i-1,j,]
-      }
+      if(alpha>U[j]){
+        X_current[j,] <- x_j
+      } #else unchanged
+    }
+    
+    if(i%%thin.factor==0){
+      X_sample[i/thin.factor,,] <- X_current
     }
   }
   close(pb)
-  return(list(X_sample=X_sample,N=N,es=es,init=init))
+  return(list(X_sample=X_sample,N=N,thin.factor=thin.factor,es=es,init=init))
 }
 

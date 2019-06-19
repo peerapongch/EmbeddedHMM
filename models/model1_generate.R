@@ -28,8 +28,9 @@ generateObservation_Poisson <- function(T,dim,X,c,delta){
   return(Y)
 }
 
-generatePoissonGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,c,delta){
+generatePoissonGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,c,delta,seed){
   # call the above two functions 
+  set.seed(seed)
   X <- generateLatent_Gaussian(T,dim,mu_init,sigma_init,F,G,Q)
   Y <- generateObservation_Poisson(T,dim,X$X,c,delta)
   sigma <- G %*% Q %*% t(G)
