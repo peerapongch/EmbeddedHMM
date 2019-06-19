@@ -37,7 +37,8 @@ generatePoissonGaussianSSM <- function(T,dim,mu_init,sigma_init,F,G,Q,c,delta,se
   sigma_U <- chol(sigma)
   sigma_L <- t(sigma_U)
   return(list(dim=dim,T=T,x0=X$x0,X=X$X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,
-              F=F,G=G,Q=Q,c=c,delta=delta,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L))
+              F=F,G=G,Q=Q,c=c,delta=delta,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L,
+              seed=seed))
 }
 
 generateObservation_Gaussian <- function(T,X,H,R){

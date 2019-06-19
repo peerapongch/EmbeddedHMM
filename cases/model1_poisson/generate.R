@@ -1,5 +1,6 @@
 source('../../models/model1_generate.R')
 # model 1 specification and simulation: poisson
+seed <- 1
 T <- 250; dim <- 3
 mu_init <- rep(0,dim); rho <- 0.7; phi <- 0.9; phis <- rep(phi,dim); v <- 1/sqrt((1-phis^2)); sigma_init <- v %*% t(v)
 for(i in 1:dim){
@@ -14,7 +15,10 @@ for(i in 1:dim){
   sigma[i,i] <- 1
 }
 delta <- rep(0.6,dim); c <- rep(-0.4,dim); F <- diag(phis); G <- t(chol(sigma)); R <- diag(1,dim); Q <- diag(1,dim)
-ssm_poisson <- generatePoissonGaussianSSM(T,dim,mu_init,sigma_init,F,G,Q,c,delta)
+save.image(file='./data/model1_poisson1_env.RData')
+
+
+ssm_poisson <- generatePoissonGaussianSSM(T,dim,mu_init,sigma_init,F,G,Q,c,delta,seed)
 # plot(ssm_poisson$Y[,1],type='l')
 save(ssm_poisson,file='./data/model1_poisson1.RData')
 
