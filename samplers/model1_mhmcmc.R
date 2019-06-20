@@ -1,9 +1,8 @@
-mcmcGaussianSSM<- function(N,es,ssm,obs='Gaussian',init=NULL,thin.factor=10,seed=NULL){
+mcmcGaussianSSM<- function(N,es,ssm,obs='Poisson',init=NULL,thin.factor=10,seed=NULL){
   require(MASS)
   # autoregressive proposal
   stopifnot((obs=='Gaussian')|(obs=='Poisson'))
   if(obs=='Gaussian'){
-    require(Rfast)
     H <- ssm$H; R <- ssm$R; Q <- ssm$Q
   } else if(obs=='Poisson'){
     c <- ssm$c; delta <- ssm$delta

@@ -13,14 +13,14 @@ forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delt
     # X_pool[t,1,] <- X_sample[n-1,t,]
     X_pool[t,1,] <- X_current[t,]
     if(t==1){
-      X_pool[t,2:L,] <- rmvnorm(L-1,mu_init,sigma_init)
+      X_pool[t,2:L,] <- mvrnorm(L-1,mu_init,sigma_init)
     } else {
       anc <- sample(1:L,L-1,replace=TRUE,prob=W[t-1,])
       Z <- matrix(rnorm(dim*(L-1)),ncol=dim,nrow=L-1)
       X_pool[t,2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U
     }
     lambdas <- t(X_pool[t,,])*delta+c
-    lW[t,] <- Rfast::colsums(dpois(Y[t,],exp(lambdas),log=TRUE))
+    lW[t,] <- colSums(dpois(Y[t,],exp(lambdas),log=TRUE))
     num <- exp(lW[t,]-max(lW[t,]))
     W[t,] <- num/sum(num)
     # print(W[t,])
@@ -48,7 +48,8 @@ backward_step <- function(forward_results,T,L,F,sigma_U){
   return(X_new)
 }
 
-pgbsModel1 <- function(ssm,N,L,init){
+pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
+  require(MASS)
   #poisson observation and gaussian latent process 
   mu_init <- ssm$mu_init
   sigma_init <- ssm$sigma_init
@@ -59,13 +60,21 @@ pgbsModel1 <- function(ssm,N,L,init){
   sigma_U <- ssm$sigma_U
   sigma_L <- ssm$sigma_L
   Y <- ssm$Y
+  dim <- ssm$dim
   
   X_sample <- array(0,dim=c(2*N+1,T,dim))
-  X_sample[1,,] <- init 
-  X_current <- init
+  if(is.null(init)){
+    if(!is.null(seed)){
+      set.seed(seed)
+    }
+    X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init)
+  } else {
+    X_sample[1,,] <- init 
+  }
+  X_current <- X_sample[1,,]
   
   pb <- txtProgressBar(min=0,max=N*2,title="pgbs",style=3)
-  for(n in seq(2,2*N,1)){
+  for(n in seq(2,2*N,2)){
     
     ### forward sequence ###
     forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
@@ -85,7 +94,8 @@ pgbsModel1 <- function(ssm,N,L,init){
     setTxtProgressBar(pb, n)
   }
   close(pb)
-  return(list(X_sample = X_sample[-1,,],N=N,init=init))
+  return(list(X_sample = X_sample[-1,,],N=N,init=init,
+              seed=seed))
 }
 
 # r_model1_transition <- function(x_from,F,sigma_L){
