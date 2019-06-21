@@ -3,18 +3,16 @@ load('./data/model1_poisson2_env.RData')
 source('../../samplers/model1_pgmet.R')
 
 L <- 250
-N <- 100
+N <- 10
 seed <- 1
 
-system.time(
+s <- system.time(
   pgmet_out <- pgmetModel1(ssm_poisson,N,L,seed)
 )
-# user  system elapsed 
-# 108.37    9.23   64.89  
-# tpi = 0.65
-tps <- 64.89/N/2 # 0.30
+tpi <- s[[3]]/N # 0.60
+tps <- tpi/4 # 0.15
 
-# save(pgmet_out,file='./data/test2_poisson1_pgbs_L20_N20000_seed1.RData')
+# save(tpi,tps,pgmet_out,file='./data/test_test_test.RData')
 
 ### compute posterior mean ###
 mci_mu <- matrix(0,nrow=T,ncol=dim)

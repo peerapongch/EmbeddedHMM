@@ -1,7 +1,7 @@
 load('./data/model1_poisson2.RData')
 load('./data/model1_poisson2_env.RData')
-
 source('../../samplers/model1_mhmcmc.R')
+
 es <- c(0.2,0.8)
 N <- 10
 seed <- 1
