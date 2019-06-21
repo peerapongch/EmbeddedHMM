@@ -13,7 +13,7 @@ sigma <- matrix(rho,ncol=dim,nrow=dim)
 for(i in 1:dim){
   sigma[i,i] <- 1
 }
-delta <- rep(0.6,dim); c <- rep(-0.4,dim); F <- diag(phis); G <- t(chol(sigma)); R <- diag(1,dim); Q <- diag(1,dim)
+delta <- rep(0.6,dim); c <- rep(-0.4,dim); F <- diag(phis); G <- t(chol(sigma)); Q <- diag(1,dim)
 save.image(file='./data/model1_poisson2_env.RData')
 
 source('../../models/model1_generate.R')

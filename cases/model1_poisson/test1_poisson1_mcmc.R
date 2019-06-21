@@ -11,10 +11,11 @@ system.time(
   mcmc_out <- mcmcGaussianSSM(N,es,ssm_poisson,obs='Poisson',seed=seed) 
 )
 
-save(mcmc_out,file='./data/test1_poisson1_mcmc_N2800000_seed1.RData')
+# save(mcmc_out,file='./data/test1_poisson1_mcmc_N2800000_seed1.RData')
 # user   system  elapsed 
 # 14803.47    10.53 15058.29 
 # tps = 0.0537
+load('./data/test1_poisson1_mcmc_N2800000_seed1.RData')
 
 # adjustment for time 
 mcmc_out$X_sample <- mcmc_out$X_sample[1:150000,,]
