@@ -2,7 +2,7 @@ ACTime <- function(mcmcs,T,dim,lag.max,tps){
   # print(tps)
   # calculate overall mean 
   overall_mean <- matrix(0,nrow=T,ncol=dim)
-  N <- mcmcs[[1]]$N
+  N <- dim(mcmcs[[1]]$X_sample)[1]
   remove <- round(N*0.1)
   N <- N-remove # reassign N  
   divisor <- N*length(mcmcs)
@@ -30,11 +30,12 @@ ACTime <- function(mcmcs,T,dim,lag.max,tps){
         prog <- prog + 1
         # calculate autocorrelation 
         chain <- X_sample[-(1:remove),t,j] - overall_mean[t,j]
+        # print(chain)
         acfs <- acf(chain,demean=FALSE,lag.max=min(lag.max,length(chain)),type='correlation',plot=FALSE)
-        rho_sum <- sum(acfs$acf)
+        rho_sum <- sum(acfs$acf[-1])
         # adjust for time
         ac_time[i,t,j] <- (1+2*rho_sum)*tps
-        print(rho_sum)
+        # print(rho_sum)
       }
     }
   } 

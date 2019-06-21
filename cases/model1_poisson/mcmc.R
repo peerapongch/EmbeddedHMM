@@ -20,27 +20,11 @@ for(j in 1:ssm_poisson$dim){
 }
 
 ### diagnostic (compare with actual latent states) ###
-plot_compare_poisson <- function(d,ssm,mcmc,mci_mu,plot.samples=FALSE,interval=10){
-  N <- mcmc$N
-  thin <- mcmc$thin.factor
-  totalN <- N/thin
-  X_mcmc <- mcmc$X_sample
-  plot(mci_mu[,d],col='black',type='l',ylim=c(-10,10),ylab=paste('X_',d,sep=''),xlab='t',
-       main='Comparison of Posterior smoothing means')
-  if(plot.samples){
-    for(i in seq(1,totalN,interval)){
-      lines(X_mcmc[i,,d],col='grey')
-    }
-    lines(mci_mu[,d],col='black')
-  }
-  lines(ssm$X[,d],type='l',col='blue')
-  legend(0,10,legend=c('MHMCMC post. mean','Latent state (truth)'),
-         col=c('black','blue'), lty=c(1,1),cex=0.8)
-}
+source('./function_plot_mcmc.R')
 
 par(mfrow=c(1,1))
 for(i in 1:dim){
-  plot_compare_poisson(i,ssm_poisson,mcmc,mci_mu,plot.samples=TRUE,interval=100) 
+  plot_mcmc_mu(i,ssm_poisson,mcmc,mci_mu,plot.samples=TRUE,interval=100) 
   # plot(ssm_poisson$Y[,i],type='l')
 }
 
