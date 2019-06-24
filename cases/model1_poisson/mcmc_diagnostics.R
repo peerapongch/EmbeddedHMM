@@ -27,15 +27,15 @@ for(i in 1:length(mcmcs)){
 }
 
 # visualise the autocorrelation
-acf(mcmcs[[3]]$X_sample[,2,1],lag.max=100)
+acf(mcmcs[[3]]$X_sample[,2,1],lag.max=1000)
 
-actime_out <- ACTime(mcmcs,T,dim=dim,lag.max=20,tps=0.05)  
+actime_out <- ACTime(mcmcs,T,dim=dim,lag.max=1000,tps=1)  
 
 # save(actime_out,file='./data/actime_out_poisson1_comparison_set1_lag50.RData')
 # load('./data/actime_out_poisson1_comparison_set1_lag50.RData')
 
 ac_time <- actime_out$ac_time
-plot(ac_time[1,,1],type='l',ylim=c(0,2))
+plot(ac_time[1,,1],type='l',ylim=c(0,120))
 lines(ac_time[2,,1],col='red')
 lines(ac_time[3,,1],col='blue')
 lines(ac_time[4,,1],col='green')

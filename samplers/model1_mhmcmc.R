@@ -31,6 +31,7 @@ mcmcGaussianSSM<- function(N,es,ssm,obs='Poisson',init=NULL,thin.factor=10,seed=
   if(is.null(init)){
     if(!is.null(seed)){
       set.seed(seed)
+      print(seed)
     }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init) 
   } else {
@@ -87,6 +88,6 @@ mcmcGaussianSSM<- function(N,es,ssm,obs='Poisson',init=NULL,thin.factor=10,seed=
     }
   }
   close(pb)
-  return(list(X_sample=X_sample,N=N,thin.factor=thin.factor,es=es,init=init))
+  return(list(X_sample=X_sample,N=N,thin.factor=thin.factor,es=es,init=init,seed=seed))
 }
 
