@@ -37,7 +37,7 @@ backward_step <- function(forward_results,T,L,F,sigma_U){
   X_new[T,] <- X_pool[T,l_T,]
   for(t in (T-1):1){
     diff <- X_new[t+1,] - X_pool[t,,] %*% F
-    lprob <- diag(-1/2*diff %*% chol2inv(sigma_U) %*% t(diff))
+    lprob <- diag(-1/2*diff %*% chol2inv(sigma_U) %*% t(diff)) # consider inverse once, consider debug (refer ehmm line 76)
     # lprob <- apply(X_pool[t,,],MARGIN=1,FUN=ld_model1_transition,x_to=X_new[t+1,],F=F,sigma_U=sigma_U)
     lprob <- lprob+lW[t,]
     num <- exp(lprob-max(lprob))
