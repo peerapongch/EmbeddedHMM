@@ -1,9 +1,8 @@
 autoregressive_update <- function(this_X_current,mu,Y,t,l,l_current,F,c,delta,sq_term,Us,last){
-  # autoregressive_update <- function(this_X_current,mu,Y,t,l,l_current,F,sigma_L,c,delta,es,es_2,zs,Us){
-  # print(F)
-  # print(X_pool[t,l_current,])
-  # mu <- F %*% X_pool[t,l_current,]
+# autoregressive_update <- function(this_X_current,X_pool,Y,t,l,l_current,F,sigma_L,c,delta,es,es_2,zs,Us){
+  # mu_current <- F %*% X_pool[t-1,l_current,]
   mu_current <- mu[l_current,]
+  
   # X_new <- mu_current + sqrt(1-es_2[l])*(this_X_current-mu_current)+es[l]*sigma_L%*%zs[l,]
   X_new <- mu_current + sq_term[l]*(this_X_current-mu_current)+last[l,]
   # hastings ratio
@@ -18,104 +17,182 @@ autoregressive_update <- function(this_X_current,mu,Y,t,l,l_current,F,c,delta,sq
   return(this_X_current)
 }
 
-shift_update <- function(this_X_current,X_pool,Y,t,l,l_current,F,sigma_L,c,delta,Us,l_new){
-  # shift update: then update x and l using shift update 
+shift_update <- function(this_X_current,X_pool,Y,t,l,l_current,F,c,delta,Us,l_new){
+  # shift update: update l then x
   # update of l UAR(1:L) done above since independent of l
-  X_new <- this_X_current + F %*% (X_pool[t-1,l_new[l],]-X_pool[t-1,l_current,])
+  # X_new <- this_X_current + F %*% (X_pool[t-1,l_new[l],]-X_pool[t-1,l_current,]) # faster abit
+  new_l <- sample(1:L,1)
+  diff <- X_pool[t-1,new_l,] - X_pool[t-1,l_current,]
+  X_new <- this_X_current + F %*% diff
   lnum <- sum(dpois(Y[t,],exp(c+delta*X_new),log=TRUE))
   ldenom <- sum(dpois(Y[t,],exp(c+delta*this_X_current),log=TRUE))
   lhastings <- lnum - ldenom
   hastings <- exp(lhastings)
   alpha <- min(1,hastings)
   if(alpha>Us[2,l]){
-    return(list(X_new=X_new,l_new=l_new[l]))
-  } #else unchanged
-  return(list(X_new=this_X_current,l_new=l_current))
+    return(list(X_new=X_new,l_new=new_l))
+  } else {
+    return(list(X_new=this_X_current,l_new=l_current))
+  }
 }
 
-forward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,F,sigma_inv,c,delta,reversed){
+forward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta){
   # metropolis
   # sequential update
   X_pool <- array(0,dim=c(T,L,dim))
   
   # start
-  es <- runif(L,0.1,0.4) # hardcoded
+  es <- runif(L,0.1,0.4)
   es_2 <- es^2
   zs <- matrix(rnorm(L*dim),ncol=dim,nrow=L)
   Us <- runif(L)
-  for(l in 1:L){
-    # autoregressive update 
-    X_new <- mu_init + sqrt(1-es_2[l])*(X_current[1,]-mu_init) + es[l]*sigma_init_L%*%zs[l,]
-    # hastings ratio
-    lnum <- sum(dpois(Y[1,],exp(c+delta*X_new),log=TRUE))
-    ldenom <- sum(dpois(Y[1,],exp(c+delta*X_current[1,]),log=TRUE))
-    lhastings <- lnum - ldenom
-    hastings <- exp(lhastings)
-    
-    alpha <- min(1,hastings)
-    if(alpha>Us[l]){
-      X_current[1,] <- X_new
-    } #else unchanged
-    
-    X_pool[1,l,] <- X_current[1,]
+  
+  # sample the index for the current states 
+  k <- sample(1:L,T,replace=TRUE)
+  
+  # place the first current state 
+  X_pool[1,k[1],] <- X_current[1,]
+  
+  # transition down from k[1] to 1
+  if(k[1]>1){
+    for(l in (k[1]-1):1){
+      # autoregressive update 
+      X_new <- mu_init + sqrt(1-es_2[l])*(X_pool[1,l+1,]-mu_init) + es[l]*sigma_init_L%*%zs[l,]
+      # hastings ratio
+      lnum <- sum(dpois(Y[1,],exp(c+delta*X_new),log=TRUE))
+      ldenom <- sum(dpois(Y[1,],exp(c+delta*X_pool[1,l+1,]),log=TRUE))
+      lhastings <- lnum - ldenom
+      hastings <- exp(lhastings)
+      
+      alpha <- min(1,hastings)
+      if(alpha>Us[l]){
+        X_pool[1,l,] <- X_new
+      } else {
+        X_pool[1,l,] <- X_pool[1,l+1,]
+      }
+    } 
   }
   
+  if(k[1]<L){
+    for(l in (k[1]+1):L){
+      # autoregressive update 
+      X_new <- mu_init + sqrt(1-es_2[l])*(X_pool[1,l-1,]-mu_init) + es[l]*sigma_init_L%*%zs[l,]
+      # hastings ratio
+      lnum <- sum(dpois(Y[1,],exp(c+delta*X_new),log=TRUE))
+      ldenom <- sum(dpois(Y[1,],exp(c+delta*X_pool[1,l-1,]),log=TRUE))
+      lhastings <- lnum - ldenom
+      hastings <- exp(lhastings)
+      
+      alpha <- min(1,hastings)
+      if(alpha>Us[l]){
+        X_pool[1,l,] <- X_new
+      } else {
+        X_pool[1,l,] <- X_pool[1,l-1,]
+      }
+    }
+  }
+  
+  acceptance_rate <- matrix(0,nrow=T-1,ncol=2)
   # then for t>1
   for(t in 2:T){
     # l needs to be sampled in sequence :( 
     diff <- X_current[t,] - t(X_pool[t-1,,] %*% F) # for symmetric F
     l_lprob <- diag(-1/2*t(diff)%*%sigma_inv%*%diff)
     prob <- exp(l_lprob-max(l_lprob)); prob <- prob/sum(prob)
-    l_current <- sample(1:L,1,prob=prob)
+    l_original <- sample(1:L,1,prob=prob)
     
     es <- runif(L,0.1,0.4) # hardcoded
-    es_2 <- es^2
-    zs <- matrix(rnorm(L*dim),ncol=dim,nrow=L) # note dim reversed from above
+    # es_2 <- es^2
+    # zs <- matrix(rnorm(L*dim),nrow=dim,ncol=L) 
+    zs <- matrix(rnorm(L*dim),nrow=L,ncol=dim) 
     Us <- matrix(runif(L*2),nrow=2,ncol=L)
     l_new <- sample(1:L,L,replace=TRUE)
     
-    # experiment to cut cost of setting current to pool: worked
-    this_X_current <- X_current[t,]
-    this_X_pool <- matrix(logical(0),nrow=L,ncol=dim)
-    mu <- X_pool[t-1,,] %*% F
+    # precompute to save cost
+    # this_X_current <- X_current[t,] 
+    this_X_pool <- matrix(logical(0),nrow=L,ncol=dim) # for this timestep only 
+    this_X_pool[k[t],] <- X_current[t,]
+    mu <- X_pool[t-1,,] %*% F # symmetric F 
     
     sq_term <- sqrt(1-es^2)
-    last <- es*zs%*%sigma_L
-    for(l in 1:L){
-      if(!reversed){
-        # AR then shift
-        X_new <- autoregressive_update(this_X_current,mu,Y,t,l,l_current,F,c,delta,sq_term,Us,last)
-        # count and then 
-        this_X_current <- X_new
-        
-        shift_out <- shift_update(this_X_current,X_pool,Y,t,l,l_current,F,sigma_L,c,delta,Us,l_new)
+    last <- es*zs%*%sigma_U
+    # last <- es*t(sigma_L%*%zs)
+
+    ar_accept <- 0 # to measure acceptance rates 
+    sh_accept <- 0
+    # edit here 
+    
+    # reversed transition: shift then AR
+    l_current <- l_original
+    if(k[t]>1){
+      for(l in (k[t]-1):1){
+        # print(paste('reversed:',l))
+        this_X_current <- this_X_pool[l+1,] # now only used to carry information between AR and shift update
+
+        # Shift then AR 
+        # SHIFT HERE 
+        shift_out <- shift_update(this_X_current,X_pool,Y,t,l,l_current,F,c,delta,Us,l_new)
         # count and then update
+        if(all(this_X_current!=shift_out$X_new)){
+          sh_accept <- sh_accept + 1
+        }
         this_X_current <- shift_out$X_new
         l_current <- shift_out$l_new
-        # set 
-        this_X_pool[l,] <- this_X_current
-        # X_pool[t,l,] <- this_X_current  
-      } else {
-        # shift then AR
-        shift_out <- shift_update(this_X_current,X_pool,Y,t,l,l_current,F,sigma_L,c,delta,Us,l_new)
-        # count and then update
-        this_X_current <- shift_out$X_new
-        l_current <- shift_out$l_new
-        
-        # X_new <- autoregressive_update(this_X_current,mu,Y,t,l,l_current,F,sigma_L,c,delta,es,es_2,zs,Us)
+
+        # AUTOREGRESSIVE HERE         
         X_new <- autoregressive_update(this_X_current,mu,Y,t,l,l_current,F,c,delta,sq_term,Us,last)
-        # count and then 
-        this_X_current <- X_new
+        # count and then update
+        if(all(this_X_current!=X_new)){
+          ar_accept <- ar_accept + 1 
+        }
+        this_X_current <- X_new 
         
-        # set 
+        # set pool
         this_X_pool[l,] <- this_X_current
-        # X_pool[t,l,] <- this_X_current
-      }
+      } 
     }
+    
+    # forward transition: AR then shift 
+    l_current <- l_original
+    if(k[t]<L){
+      for(l in (k[t]+1):L){
+        # print(paste('forward:',l))
+        this_X_current <- this_X_pool[l-1,] # now only used to carry information between AR and shift update
+        # print(this_X_current)
+        
+        # AR then shift
+        # AUTOREGRESSIVE HERE 
+        X_new <- autoregressive_update(this_X_current,mu,Y,t,l,l_current,F,c,delta,sq_term,Us,last)
+        # count and update
+        if(all(this_X_current!=X_new)){
+          ar_accept <- ar_accept + 1 
+        }
+        this_X_current <- X_new 
+        
+        # SHIFT HERE ### BREAKDOWN HERE!!!
+        shift_out <- shift_update(this_X_current,X_pool,Y,t,l,l_current,F,c,delta,Us,l_new)
+        # count and then update
+        if(all(this_X_current!=shift_out$X_new)){
+          sh_accept <- sh_accept + 1
+        }
+        this_X_current <- shift_out$X_new
+        l_current <- shift_out$l_new
+
+        # set pool
+        this_X_pool[l,] <- this_X_current
+      } 
+    }
+    
+    acceptance_rate[t-1,] <- c(ar_accept,sh_accept)/L
     X_pool[t,,] <- this_X_pool
     X_current[t,] <- this_X_current
+    # if(t==100){
+    #   print('============')
+    #   print(k[t])
+    #   print(this_X_pool[,3])
+    # }
   } 
-  return(X_pool)
+  return(list(X_pool=X_pool,acceptance_rate=acceptance_rate))
 }
 
 backward_sampling <- function(X_pool,L,T,dim,F,sigma_inv){
@@ -162,7 +239,7 @@ ehmmModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
     sigma_inv <- ssm$sigma_inv
   }
   
-  # X_sample <- array(0,dim=c(2*N+1,T,dim))
+  # X_sample <- array(0,dim=c(N+1,T,dim))
   X_sample <- array(0,dim=c(2*N+1,T,dim))
   if(is.null(init)){
     if(!is.null(seed)){
@@ -173,20 +250,34 @@ ehmmModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]
-  pb <- txtProgressBar(min=0,max=2*N,title="pgbs",style=3)
+  
+  acceptance_rate <- array(0,dim=c(2*N,T-1,2)) # 2 for measuring only the autocorrelation and shift updates
+  pb <- txtProgressBar(min=0,max=2*N,title="ehmm",style=3)
+  # acceptance_rate <- array(0,dim=c(N,T-1,2))
+  # pb <- txtProgressBar(min=0,max=N+1,title="pgbs",style=3)
+  
   for(i in seq(2,2*N,2)){
+  # for(i in 2:(N+1)){
     # forward sequence
-    X_pool <- forward_pool(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,F,sigma_inv,c,delta,reversed=FALSE)
+    pool_out <- forward_pool(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta)
+    
+    X_pool <- pool_out$X_pool
+    acceptance_rate[i-1,,] <- pool_out$acceptance_rate
+    
     X_current <- backward_sampling(X_pool,L,T,dim,F,sigma_inv)
     X_sample[i,,] <- X_current
     
     # reversed sequence
-    ## todo (modify forward_pool to detect reversed chain), and test forward
-    X_pool <- forward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,F,sigma_inv,c,delta,reversed=TRUE)
+    pool_out <- forward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta)
+
+    X_pool <- pool_out$X_pool
+    acceptance_rate[i,,] <- pool_out$acceptance_rate
+
     X_current[seq(T,1,-1),] <- backward_sampling(X_pool,L,T,dim,F,sigma_inv)
     X_sample[i+1,,] <- X_current
     
     setTxtProgressBar(pb, i)
   }
-  return(list(X_sample=X_sample[-1,,],N=N,L=L,init=init,seed=seed,X_pool=X_pool))
+  return(list(X_sample=X_sample[-1,,],N=N,L=L,init=init,seed=seed,X_pool=X_pool,
+              acceptance_rate=acceptance_rate))
 }
