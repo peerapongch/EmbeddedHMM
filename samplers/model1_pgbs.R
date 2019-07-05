@@ -28,7 +28,7 @@ forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delt
   return(list(lW=lW,W=W,X_pool=X_pool))
 }
 
-backward_step <- function(forward_results,T,L,F,sigma_U){
+backward_step <- function(forward_results,T,L,F,sigma_inv){
   W <- forward_results$W 
   lW <- forward_results$lW 
   X_pool <- forward_results$X_pool
@@ -36,8 +36,9 @@ backward_step <- function(forward_results,T,L,F,sigma_U){
   l_T <- sample(1:L,1,replace=TRUE,prob=W[T,])
   X_new[T,] <- X_pool[T,l_T,]
   for(t in (T-1):1){
-    diff <- X_new[t+1,] - X_pool[t,,] %*% F
-    lprob <- diag(-1/2*diff %*% chol2inv(sigma_U) %*% t(diff)) # consider inverse once, consider debug (refer ehmm line 76)
+    # diff <- X_new[t+1,] - X_pool[t,,] %*% F
+    diff <- X_new[t+1,] - t(X_pool[t,,] %*% F) # also only for symmetric F 
+    lprob <- diag(-1/2*t(diff)%*%sigma_inv%*%diff) # consider inverse once, consider debug (refer ehmm line 76): done
     # lprob <- apply(X_pool[t,,],MARGIN=1,FUN=ld_model1_transition,x_to=X_new[t+1,],F=F,sigma_U=sigma_U)
     lprob <- lprob+lW[t,]
     num <- exp(lprob-max(lprob))
@@ -62,6 +63,13 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   Y <- ssm$Y
   dim <- ssm$dim
   
+  if(is.null(ssm$sigma_inv)){
+    print('old ssm object, computing inverse for sigma')
+    sigma_inv <- chol2inv(sigma_U)
+  } else {
+    sigma_inv <- ssm$sigma_inv
+  }
+
   X_sample <- array(0,dim=c(2*N+1,T,dim))
   if(is.null(init)){
     if(!is.null(seed)){
@@ -78,14 +86,14 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
     
     ### forward sequence ###
     forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    X_new <- backward_step(forward_results,T,L,F,sigma_U)
+    X_new <- backward_step(forward_results,T,L,F,sigma_inv)
     # save 
     X_sample[n,,] <- X_new
     
     ### reversed sequence ###
     X_current <- X_new[seq(T,1,-1),] # form reversed sequence
     forward_results <- forward_step(X_current,Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    X_new <- backward_step(forward_results,T,L,F,sigma_U)
+    X_new <- backward_step(forward_results,T,L,F,sigma_inv)
     # save
     X_sample[n+1,,] <- X_new[seq(T,1,-1),] # reverse the reversed
     
@@ -97,23 +105,3 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   return(list(X_sample = X_sample[-1,,],N=N,init=init,
               seed=seed))
 }
-
-# r_model1_transition <- function(x_from,F,sigma_L){
-#   return(F%*%x_from+sigma_L%*%rnorm(length(x_from)))
-# }
-
-# d_model1_transition <- function(x_from,x_to,F,sigma_U){
-#   d <- length(x_to)
-#   det_U <- sum(diag(sigma_U))
-#   # det_U <- tr(sigma_U)
-#   inv_sigma <- chol2inv(sigma_U)
-#   diff <- x_to-F%*%x_from
-#   dense <- (2*pi)^(-d/2) / det_U * exp(-1/2*t(diff)%*%inv_sigma%*%diff)
-#   return(dense)
-# }
-
-# ld_model1_transition <- function(x_from,x_to,F,sigma_U){
-#   inv_sigma <- chol2inv(sigma_U)
-#   diff <- x_to-F%*%x_from
-#   return(-1/2*t(diff)%*%inv_sigma%*%diff)
-# }

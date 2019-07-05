@@ -81,6 +81,13 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
   mus <- list(pre_mu_1,pre_mu_j,pre_mu_T)
   sigmas_L <- list(sigma_1_L,sigma_j_L,sigma_T_L)
   
+  if(is.null(ssm$sigma_inv)){
+    print('old ssm object, computing inverse for sigma')
+    sigma_inv <- chol2inv(sigma_U)
+  } else {
+    sigma_inv <- ssm$sigma_inv
+  }
+
   # intialise sample matrix
   X_sample <- array(0,dim=c(4*N+1,T,dim))
   if(is.null(init)){
@@ -97,14 +104,14 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
   for(n in seq(2,4*N,4)){
     ### Step1: pgbs with forward sequence ###
     forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    X_sample[n,,] <- backward_step(forward_results,T,L,F,sigma_U)
+    X_sample[n,,] <- backward_step(forward_results,T,L,F,sigma_inv)
     
     ### Step2: mcmc 10 steps ###
     X_sample[n+1,,] <- mcmc_step(X_sample[n,,],Y,N.mcmc,es,T,dim,mus,sigmas_L,c,delta,thin.factor=1)
     
     ### Step3: pgbs reversed sequence ###
     forward_results <- forward_step(X_sample[n+1,seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    X_sample[n+2,seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_U) # reverse the index when setting
+    X_sample[n+2,seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_inv) # reverse the index when setting
     
     ### Step4: mcmc 10 steps ###
     X_sample[n+3,,] <- mcmc_step(X_sample[n+2,,],Y,N.mcmc,es,T,dim,mus,sigmas_L,c,delta,thin.factor=1)
