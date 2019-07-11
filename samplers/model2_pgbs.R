@@ -1,22 +1,32 @@
-forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta){
+forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,delta){
   X_pool <- array(0,dim=c(T,L,dim))
   W <- matrix(0,nrow=T,ncol=L)
   lW <- matrix(0,nrow=T,ncol=L)
+  this_X_pool <- matrix(logical(0),nrow=L,ncol=dim)
   for(t in 1:T){
     # X_pool[t,1,] <- X_sample[n-1,t,]
-    X_pool[t,1,] <- X_current[t,]
+    this_X_pool[1,] <- X_current[t,]
+    # X_pool[t,1,] <- X_current[t,]
     if(t==1){
-      X_pool[t,2:L,] <- mvrnorm(L-1,mu_init,sigma_init)
+      this_X_pool[2:L,] <- mvrnorm(L-1,mu_init,sigma_init)
+      # X_pool[t,2:L,] <- mvrnorm(L-1,mu_init,sigma_init)
     } else {
       anc <- sample(1:L,L-1,replace=TRUE,prob=W[t-1,])
       Z <- matrix(rnorm(dim*(L-1)),ncol=dim,nrow=L-1)
-      X_pool[t,2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U
+      this_X_pool[2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U 
+      # X_pool[t,2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U
     }
-    lambdas <- t(X_pool[t,,])*delta+c
-    lW[t,] <- colSums(dpois(Y[t,],exp(lambdas),log=TRUE))
+    # lambdas <- delta*abs(t(X_pool[t,,]))
+    lambdas <- delta*abs(t(this_X_pool))
+    lW[t,] <- colSums(dpois(Y[t,],lambdas,log=TRUE))
+    # lW[t,] <- colsums(dpois(Y[t,],lambdas,log=TRUE),parallel=TRUE)
+    # lW[t,] <- apply(dpois(Y[t,],lambdas,log=TRUE),MARGIN=2,FUN=sum)
+    # lW[t,] <- parApply(cl,dpois(Y[t,],lambdas,log=TRUE),MARGIN=2,FUN=sum)
     num <- exp(lW[t,]-max(lW[t,]))
     W[t,] <- num/sum(num)
-    # print(W[t,])
+    
+    # set pool
+    X_pool[t,,] <- this_X_pool
   }
   return(list(lW=lW,W=W,X_pool=X_pool))
 }
@@ -42,13 +52,12 @@ backward_step <- function(forward_results,T,L,F,sigma_inv){
   return(X_new)
 }
 
-pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
+pgbsModel2 <- function(ssm,N,L,init=NULL,seed=NULL){
   require(MASS)
   #poisson observation and gaussian latent process 
   mu_init <- ssm$mu_init
   sigma_init <- ssm$sigma_init
   F <- ssm$F
-  c <- ssm$c
   delta <- ssm$delta
   T <- ssm$T
   sigma_U <- ssm$sigma_U
@@ -64,9 +73,6 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   }
 
   X_sample <- array(0,dim=c(2*N+1,T,dim))
-  W <- array(logical(0),dim=c(2*N,T,L))
-  lW <- array(logical(0),dim=c(2*N,T,L))
-
   if(is.null(init)){
     if(!is.null(seed)){
       set.seed(seed)
@@ -81,23 +87,23 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   for(n in seq(2,2*N,2)){
     
     ### forward sequence ###
-    forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n,,] <- forward_results$W
-    lW[n,,] <- forward_results$lW
-    X_current <- backward_step(forward_results,T,L,F,sigma_inv)
+    forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,delta)
+    X_new <- backward_step(forward_results,T,L,F,sigma_inv)
     # save 
-    X_sample[n,,] <- X_current
+    X_sample[n,,] <- X_new
     
     ### reversed sequence ###
-    forward_results <- forward_step(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n+1,seq(T,1,-1),] <- forward_results$W
-    lW[n+1,seq(T,1,-1),] <- forward_results$lW
-    X_current[seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_inv)
+    X_current <- X_new[seq(T,1,-1),] # form reversed sequence
+    forward_results <- forward_step(X_current,Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,delta)
+    X_new <- backward_step(forward_results,T,L,F,sigma_inv)
     # save
-    X_sample[n+1,,] <- X_current # reverse the reversed
+    X_sample[n+1,,] <- X_new[seq(T,1,-1),] # reverse the reversed
     
+    ### update current and terminate ###
+    X_current <- X_sample[n+1,,] # forward sequence
     setTxtProgressBar(pb, n)
   }
   close(pb)
-  return(list(X_sample = X_sample[-1,,],N=N,init=init,W=W,lW=lW,seed=seed))
+  return(list(X_sample = X_sample[-1,,],N=N,init=init,
+              seed=seed))
 }
