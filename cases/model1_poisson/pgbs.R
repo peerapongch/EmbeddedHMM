@@ -1,17 +1,17 @@
 load('./data/model1_poisson1.RData')
 load('./data/model1_poisson1_env.RData')
 source('../../samplers/model1_pgbs.R')
-source('../../evaluation/autocorrelation_time.R')
+# source('../../evaluation/autocorrelation_time.R')
 
+N <- 1000
 L <- 250
-N <- 100
 seed <- 1
 
 system.time(
   pgbs_out <- pgbsModel1(ssm_poisson,N,L,seed)
 )
 
-save(pgbs_out,file='./data/poisson1_pgbs_L250_N15000_seed1.RData')
+save(pgbs_out,file='./data/poisson1_pgbs_L250_N1000_seed1.RData')
 # load(file='./data/pgbs_model1_poisson_1_L250_N2000.RData')
 
 # pgbs_out <- list(X_sample=pgbs_out,N=2000)

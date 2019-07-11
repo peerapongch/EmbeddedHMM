@@ -3,7 +3,6 @@ forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delt
   W <- matrix(0,nrow=T,ncol=L)
   lW <- matrix(0,nrow=T,ncol=L)
   for(t in 1:T){
-    # X_pool[t,1,] <- X_sample[n-1,t,]
     X_pool[t,1,] <- X_current[t,]
     if(t==1){
       X_pool[t,2:L,] <- mvrnorm(L-1,mu_init,sigma_init)
@@ -16,7 +15,6 @@ forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delt
     lW[t,] <- colSums(dpois(Y[t,],exp(lambdas),log=TRUE))
     num <- exp(lW[t,]-max(lW[t,]))
     W[t,] <- num/sum(num)
-    # print(W[t,])
   }
   return(list(lW=lW,W=W,X_pool=X_pool))
 }
@@ -29,10 +27,8 @@ backward_step <- function(forward_results,T,L,F,sigma_inv){
   l_T <- sample(1:L,1,replace=TRUE,prob=W[T,])
   X_new[T,] <- X_pool[T,l_T,]
   for(t in (T-1):1){
-    # diff <- X_new[t+1,] - X_pool[t,,] %*% F
     diff <- X_new[t+1,] - t(X_pool[t,,] %*% F) # also only for symmetric F 
     lprob <- diag(-1/2*t(diff)%*%sigma_inv%*%diff) # consider inverse once, consider debug (refer ehmm line 76): done
-    # lprob <- apply(X_pool[t,,],MARGIN=1,FUN=ld_model1_transition,x_to=X_new[t+1,],F=F,sigma_U=sigma_U)
     lprob <- lprob+lW[t,]
     num <- exp(lprob-max(lprob))
     prob <- num/sum(num)
@@ -42,7 +38,7 @@ backward_step <- function(forward_results,T,L,F,sigma_inv){
   return(X_new)
 }
 
-pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
+pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL,return.weight=FALSE){
   require(MASS)
   #poisson observation and gaussian latent process 
   mu_init <- ssm$mu_init
@@ -64,8 +60,10 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   }
 
   X_sample <- array(0,dim=c(2*N+1,T,dim))
-  W <- array(logical(0),dim=c(2*N,T,L))
-  lW <- array(logical(0),dim=c(2*N,T,L))
+  if(return.weight){
+    W <- array(logical(0),dim=c(2*N,T,L))
+    lW <- array(logical(0),dim=c(2*N,T,L))
+  }
 
   if(is.null(init)){
     if(!is.null(seed)){
@@ -79,25 +77,31 @@ pgbsModel1 <- function(ssm,N,L,init=NULL,seed=NULL){
   
   pb <- txtProgressBar(min=0,max=N*2,title="pgbs",style=3)
   for(n in seq(2,2*N,2)){
-    
     ### forward sequence ###
     forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n,,] <- forward_results$W
-    lW[n,,] <- forward_results$lW
+    if(return.weight){
+      W[n-1,,] <- forward_results$W
+      lW[n-1,,] <- forward_results$lW
+    }
     X_current <- backward_step(forward_results,T,L,F,sigma_inv)
     # save 
     X_sample[n,,] <- X_current
     
     ### reversed sequence ###
     forward_results <- forward_step(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n+1,seq(T,1,-1),] <- forward_results$W
-    lW[n+1,seq(T,1,-1),] <- forward_results$lW
+    if(return.weight){
+      W[n,seq(T,1,-1),] <- forward_results$W
+      lW[n,seq(T,1,-1),] <- forward_results$lW
+    }
     X_current[seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_inv)
     # save
-    X_sample[n+1,,] <- X_current # reverse the reversed
+    X_sample[n+1,,] <- X_current
     
     setTxtProgressBar(pb, n)
   }
   close(pb)
-  return(list(X_sample = X_sample[-1,,],N=N,init=init,W=W,lW=lW,seed=seed))
+  if(return.weight){
+    return(list(X_sample = X_sample[-1,,],N=N,init=init,W=W,lW=lW,seed=seed))
+  }
+  return(list(X_sample = X_sample[-1,,],N=N,init=init,seed=seed))
 }

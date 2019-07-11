@@ -51,7 +51,7 @@ mcmc_step<- function(X_current,Y,N,es,T,dim,mus,sigmas_L,c,delta,thin.factor=10,
   # return(list(X_sample=X_sample,N=N,thin.factor=thin.factor,es=es,init=init))
 }
 
-pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
+pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL,return.weight=FALSE){
   require(MASS)
   #poisson observation and gaussian latent process 
   mu_init <- ssm$mu_init
@@ -90,8 +90,10 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
 
   # intialise sample matrix
   X_sample <- array(0,dim=c(4*N+1,T,dim))
-  W <- array(logical(0),dim=c(2*N,T,L))
-  lW <- array(logical(0),dim=c(2*N,T,L))
+  if(return.weight){
+    W <- array(logical(0),dim=c(2*N,T,L))
+    lW <- array(logical(0),dim=c(2*N,T,L))
+  }
   if(is.null(init)){
     if(!is.null(seed)){
       set.seed(seed)
@@ -106,8 +108,10 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
   for(n in seq(2,4*N,4)){
     ### Step1: pgbs with forward sequence ###
     forward_results <- forward_step(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n/2+1,,] <- forward_results$W
-    lW[n/2+1,,] <- forward_results$lW
+    if(return.weight){
+      W[n/2,,] <- forward_results$W
+      lW[n/2,,] <- forward_results$lW
+    }
     X_sample[n,,] <- backward_step(forward_results,T,L,F,sigma_inv)
     
     ### Step2: mcmc 10 steps ###
@@ -115,8 +119,10 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
     
     ### Step3: pgbs reversed sequence ###
     forward_results <- forward_step(X_sample[n+1,seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,F,sigma_U,mu_init,sigma_init,c,delta)
-    W[n/2+2,seq(T,1,-1),] <- forward_results$W
-    lW[n/2+2,seq(T,1,-1),] <- forward_results$lW
+    if(return.weight){
+      W[n/2+1,seq(T,1,-1),] <- forward_results$W
+      lW[n/2+1,seq(T,1,-1),] <- forward_results$lW
+    }
     X_sample[n+2,seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_inv) # reverse the index when setting
     
     ### Step4: mcmc 10 steps ###
@@ -128,5 +134,8 @@ pgmetModel1 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL){
   }
   setTxtProgressBar(pb, 4*N)
   close(pb)
-  return(list(X_sample = X_sample[-1,,],N=N,init=init,W=W,lW=lW,seed=seed))
+  if(return.weight){
+    return(list(X_sample = X_sample[-1,,],N=N,init=init,W=W,lW=lW,seed=seed))
+  }
+  return(list(X_sample = X_sample[-1,,],N=N,init=init,seed=seed))
 }

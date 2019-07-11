@@ -16,12 +16,9 @@ forward_step <- function(X_current,Y,T,L,dim,F,sigma_U,mu_init,sigma_init,delta)
       this_X_pool[2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U 
       # X_pool[t,2:L,] <- X_pool[t-1,anc,]%*%t(F) + Z %*% sigma_U
     }
-    # lambdas <- delta*abs(t(X_pool[t,,]))
+
     lambdas <- delta*abs(t(this_X_pool))
     lW[t,] <- colSums(dpois(Y[t,],lambdas,log=TRUE))
-    # lW[t,] <- colsums(dpois(Y[t,],lambdas,log=TRUE),parallel=TRUE)
-    # lW[t,] <- apply(dpois(Y[t,],lambdas,log=TRUE),MARGIN=2,FUN=sum)
-    # lW[t,] <- parApply(cl,dpois(Y[t,],lambdas,log=TRUE),MARGIN=2,FUN=sum)
     num <- exp(lW[t,]-max(lW[t,]))
     W[t,] <- num/sum(num)
     
