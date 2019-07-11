@@ -237,7 +237,7 @@ ehmmModel1_forward <- function(ssm,N,L,init=NULL,seed=NULL){
   }
   X_current <- X_sample[1,,]
   
-  acceptance_rate <- array(0,dim=c(2*N,T-1,2)) # 2 for measuring only the autocorrelation and shift updates
+  acceptance_rate <- array(0,dim=c(2*N,T,2)) # 2 for measuring only the autocorrelation and shift updates
   pb <- txtProgressBar(min=0,max=2*N,title="ehmm",style=3)
   
   for(i in seq(2,2*N,2)){
