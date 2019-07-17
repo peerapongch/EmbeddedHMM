@@ -15,15 +15,15 @@ shift_update <- function(this_X_current,next_X_pool,Y,t,l,l_current,rev_F,c,delt
   }
 }
 
-backward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U){
+backward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U,elim){
   # metropolis
   # sequential update
   X_pool <- array(0,dim=c(T,L,dim))
   acceptance_rate <- matrix(0,nrow=T,ncol=2)
-  x_accept <- 0 
-  l_accept <- 0
+  # x_accept <- L-1
+  # l_accept <- 0
   # start
-  es <- runif(L,0.1,0.4)
+  es <- runif(L,elim[1],elim[2])
   es_2 <- es^2
   zs <- matrix(rnorm(L*dim),ncol=dim,nrow=L)
   Us <- runif(L)
@@ -41,17 +41,7 @@ backward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma
     for(l in (k[T]-1):1){
       # update latent states
       # autoregressive update 
-      X_new <- mu_init + sqrt(1-es_2[l])*(this_X_current-mu_init) + es[l]*sigma_init_L%*%zs[l,]
-      # hastings ratio
-      lnum <- sum(dpois(Y[T,],exp(c+delta*X_new),log=TRUE))
-      ldenom <- sum(dpois(Y[T,],exp(c+delta*this_X_current),log=TRUE))
-      hastings <- exp(lnum - ldenom)
-      alpha <- min(1,hastings)
-      if(alpha>Us[l]){
-        this_X_current <- X_new
-        x_accept <- x_accept + 1
-      } 
-      # set pool
+      this_X_current <- mu_init + sqrt(1-es_2[l])*(this_X_current-mu_init) + es[l]*sigma_init_L%*%zs[l,]
       X_pool[T,l,] <- this_X_current
     } 
   }
@@ -60,21 +50,11 @@ backward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma
     this_X_current <- X_current[T,]
     for(l in (k[T]+1):L){
       # autoregressive update latent states
-      X_new <- mu_init + sqrt(1-es_2[l])*(this_X_current-mu_init) + es[l]*sigma_init_L%*%zs[l,]
-      # hastings ratio
-      lnum <- sum(dpois(Y[T,],exp(c+delta*X_new),log=TRUE))
-      ldenom <- sum(dpois(Y[T,],exp(c+delta*this_X_current),log=TRUE))
-      hastings <- exp(lnum - ldenom)
-      alpha <- min(1,hastings)
-      if(alpha>Us[l]){
-        this_X_current <- X_new
-        x_accept <- x_accept + 1
-      } 
-      # set pool
-      X_pool[T,l,] <- X_new
+      this_X_current <- mu_init + sqrt(1-es_2[l])*(this_X_current-mu_init) + es[l]*sigma_init_L%*%zs[l,]
+      X_pool[T,l,] <- this_X_current
     }
   }
-  acceptance_rate[T,] <- c(x_accept,l_accept)/(L-1)
+  acceptance_rate[T,] <- c(1,0)
 
   # then for t>1
   for(t in (T-1):1){
@@ -95,7 +75,7 @@ backward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma
 
     # setup for autoregressive update
     mu <- X_pool[t+1,,] %*% rev_F # symmetric F  
-    es <- runif(L,0.1,0.4) # hardcoded
+    es <- runif(L,elim[1],elim[2]) # hardcoded
     sq_term <- sqrt(1-es^2)
     zs <- matrix(rnorm(L*dim),nrow=L,ncol=dim) 
     last <- es*zs%*%rev_sigma_U
@@ -190,7 +170,7 @@ forward_sampling <- function(X_pool,Y,L,T,dim,F,mu_init,sigma_init_inv,sigma_inv
   return(X_new)
 }
 
-ehmmModel1_backward <- function(ssm,N,L,init=NULL,seed=NULL){
+ehmmModel1_backward <- function(ssm,N,L,init=NULL,seed=NULL,elim=c(0,0.4)){
   # sampling epsilon values instead
   # setup
   require(MASS)
@@ -243,7 +223,7 @@ ehmmModel1_backward <- function(ssm,N,L,init=NULL,seed=NULL){
 
   for(i in seq(2,2*N,2)){
     # forward sequence
-    pool_out <- backward_pool(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U)
+    pool_out <- backward_pool(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U,elim)
     X_pool <- pool_out$X_pool
     acceptance_rate[i-1,,] <- pool_out$acceptance_rate
     
@@ -251,7 +231,7 @@ ehmmModel1_backward <- function(ssm,N,L,init=NULL,seed=NULL){
     X_sample[i,,] <- X_current
     
     # reversed sequence
-    pool_out <- backward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U)
+    pool_out <- backward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,c,delta,rev_F,rev_sigma_U,elim)
     X_pool <- pool_out$X_pool
     acceptance_rate[i,seq(T,1,-1),] <- pool_out$acceptance_rate
 
