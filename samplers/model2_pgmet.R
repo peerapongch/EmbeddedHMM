@@ -110,6 +110,7 @@ pgmetModel2 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL,return.weight=F
       lW[n/2,,] <- forward_results$lW
     }
     X_sample[n,,] <- backward_step(forward_results,T,L,F,sigma_inv)
+    rm(forward_results)
     
     ### Step2: mcmc 10 steps ###
     X_sample[n+1,,] <- mcmc_step(X_sample[n,,],Y,N.mcmc,es,T,dim,mus,sigmas_L,delta,thin.factor=1)
@@ -121,7 +122,8 @@ pgmetModel2 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL,return.weight=F
       lW[n/2+1,seq(T,1,-1),] <- forward_results$lW
     }
     X_sample[n+2,seq(T,1,-1),] <- backward_step(forward_results,T,L,F,sigma_inv) # reverse the index when setting
-    
+    rm(forward_results)
+
     ### Step4: mcmc 10 steps ###
     X_sample[n+3,,] <- mcmc_step(X_sample[n+2,,],Y,N.mcmc,es,T,dim,mus,sigmas_L,delta,thin.factor=1)
     

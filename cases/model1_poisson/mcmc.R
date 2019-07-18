@@ -3,12 +3,12 @@ load('./data/model1_poisson1_env.RData')
 source('../../samplers/model1_mhmcmc.R')
 
 ### MHMCMC with autoregressive update ###
-N <- 1000; es <- c(0.2,0.8)
+N <- 10000; es <- c(0.2,0.8)
 system.time(
-  mhmcmc <- mhmcmcModel1(ssm_poisson,N,es) 
+  mhmcmc_out <- mhmcmcModel1(ssm_poisson,N,es) 
 )
 
-save(mcmc,file='./data/model1_poisson1_mcmc_N10e6.RData')
+#  save(mcmc,file='./data/model1_poisson1_mcmc_N10e6.RData')
 
 X_mcmc <- mcmc$X_sample
 ### MCI mu ###
