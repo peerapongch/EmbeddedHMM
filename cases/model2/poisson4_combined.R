@@ -5,7 +5,7 @@ load('./data/model2_poisson4_env.RData')
 source('../../samplers/model2_combined.R')
 N <- 250
 L <- 80
-L_particles <- 2000
+L_particles <- 5000
 es <- c(0.3,1)
 init <- matrix(1,nrow=T,ncol=dim)
 N.mcmc <- 50

@@ -1,8 +1,9 @@
+setMKLthreads(2)
 load('./data/model2_poisson3.RData')
 load('./data/model2_poisson3_env.RData')
 
 source('../../samplers/model2_ehmm_forward.R')
-N <- 9000
+N <- 45000
 L <- 80
 init <- matrix(1,nrow=T,ncol=dim)
 system.time(

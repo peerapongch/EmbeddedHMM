@@ -54,7 +54,7 @@ forward_pool <- function(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_
   # reversed transition down from k[1] to 1
   if(k[1]>1){
     for(l in (k[1]-1):1){
-      if(l %% 2 == 0){ # if even do usial
+      if(l %% 2 == 0){ # if even do usual
         # autoregressive update 
         X_new <- mu_init + sqrt(1-es_2[l])*(X_pool[1,l+1,]-mu_init) + es[l]*sigma_init_L%*%zs[l,]
         # hastings ratio
@@ -261,6 +261,9 @@ ehmmModel2_forward <- function(ssm,N,L,init=NULL,seed=NULL){
     }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init)
   } else {
+    if(!is.null(seed)){
+      set.seed(seed)
+    }
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]

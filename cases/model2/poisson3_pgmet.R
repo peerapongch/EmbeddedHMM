@@ -3,15 +3,15 @@ load('./data/model2_poisson3.RData')
 load('./data/model2_poisson3_env.RData')
 
 source('../../samplers/model2_pgmet.R')
-N <- 250
+N <- 10
 es <- c(0.3,1)
-L <- 5000
+L <- 1000
 N.mcmc <- 50
 seed <- 1
 system.time(
   pgmet_out <- pgmetModel2(ssm_poisson,N,L,es,N.mcmc=N.mcmc,seed=seed)
 )
-save(pgmet_out,file='./data/poisson3_pgmet.RData')
+# save(pgmet_out,file='./data/poisson3_pgmet_v4.RData')
 
 # library(coda)
 # x <- as.mcmc(pgbs_out$X_sample[,100,1:3])

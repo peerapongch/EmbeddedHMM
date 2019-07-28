@@ -1,5 +1,3 @@
-source('../../samplers/model2_pgbs.R') # need to convert these into a package later
-
 autoregressive_update <- function(this_X_current,mu,Y,t,l,l_current,F,delta,sq_term,Us,last){
 # autoregressive_update <- function(this_X_current,X_pool,Y,t,l,l_current,F,sigma_L,c,delta,es,es_2,zs,Us){
   # mu_current <- F %*% X_pool[t-1,l_current,]
@@ -224,121 +222,187 @@ backward_sampling <- function(X_pool,L,T,dim,F,sigma_inv){
   return(X_new)
 }
 
-mcmc_step<- function(X_current,Y,N,es,T,dim,mus,sigmas_L,delta,thin.factor=10,seed=NULL){
-  require(MASS)
-  
-  ##### MHMCMC autoregressive ######
-  X_sample <- array(0,dim=c(N/thin.factor,T,dim))
-  X_sample[1,,] <- X_current
-  if(!is.null(seed)){
-    set.seed(seed)
-  }
-  for(i in 2:N){
-    U <- runif(T)
-    for(j in 1:T){
-      # find the mu 
-      if(j==1) {
-        # mu_j <- pre_mu_1 %*% X_sample[i-1,2,]
-        mu_j <- mus[[1]] %*% X_current[2,]
-        L <- sigmas_L[[1]]
-      } else if(j==T) {
-        mu_j <- mus[[3]] %*% X_current[T-1,]
-        L <- sigmas_L[[3]]
-      } else {
-        # mu_j <- pre_mu_j %*% (X_sample[i,j-1,]+X_sample[i-1,j+1,])
-        mu_j <- mus[[2]] %*% (X_current[j-1,]+X_current[j+1,])
-        L <- sigmas_L[[2]]
-      }
-      
-      # autoregressive update
-      z <- rnorm(dim)
-      e <- es[i%%length(es)+1] # alternate
-      x_j <- mu_j+sqrt(1-e^2)*(X_current[j,]-mu_j)+e*L%*%z
-      
-      lnum <- sum(dpois(Y[j,],delta*abs(x_j),log=TRUE))
-      ldenom <- sum(dpois(Y[j,],delta*abs(X_current[j,]),log=TRUE))
-      hastings <-exp(lnum - ldenom)
-      
-      alpha <- min(1,hastings)
-      if(alpha>U[j]){
-        X_current[j,] <- x_j
-      } #else unchanged
-    }
-    
-    if(i%%thin.factor==0){
-      X_sample[i/thin.factor,,] <- X_current
-    }
-  }
-  return(X_current) # return only the last sample
-  # return(list(X_sample=X_sample,N=N,thin.factor=thin.factor,es=es,init=init))
+makeSigma <- function(rho,dim){
+  sigma <- matrix(rho,ncol=dim,nrow=dim)
+  diag(sigma) <- 1
+  return(sigma)
 }
 
-ehmmModel2_combined <- function(ssm,N,L,L_particles,es,N.mcmc=10,init=NULL,seed=NULL){
+makeSigma_init <- function(rho,phi){
+  v <- 1/sqrt((1-phi^2))
+  sigma_init <- rho * v %*% t(v)
+  diag(sigma_init) <- diag(sigma_init)/rho
+  return(sigma_init)
+}
+
+param_rw_lprob <- function(param_formed,X_current,Y,T){
+  # form
+  delta <- param_formed$delta
+  F <- param_formed$F
+  phi <- diag(F)
+  sigma_init <- param_formed$sigma_init
+  sigma <- param_formed$sigma
+  # then lots of precomputation 
+  sigma_init_inv <- param_formed$sigma_init_inv
+  sigma_inv <- param_formed$sigma_inv
+
+  X_current_t <- t(X_current)
+  mu <- phi * X_current_t
+  diff <- X_current_t[,2:T] - mu[,1:(T-1)]
+  # p(x_1:T|param)
+  lprob1 <- -1/2*(log(det(sigma_init)) + (T-1)*log(det(sigma)) + t(X_current[1,])%*%sigma_init_inv%*%X_current[1,] + sum(diag(t(diff)%*%sigma_inv%*%diff)))
+  # print(lprob1)
+  # p(y_1:T|x_1:T,param)
+
+  lambda <- as.vector(delta*abs(t(X_current)))
+  # print(delta)
+  # print(lambda)
+  lprob2 <- sum(dpois(as.vector(t(Y)),lambda,log=TRUE))
+  # print(dpois(as.vector(t(Y)),lambda,log=TRUE))
+
+  return(lprob1+lprob2)
+}
+
+param_update_rw <- function(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim){
+  # propose
+  # param_new <- param_current + 2*rw_scale*(runif(3)-1/2)
+  param_new <- param_current + rw_scale*rnorm(3)
+
+  check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
+  check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
+  check_domain_delta <- (param_new[3] > 0)
+
+  if(check_domain_phi && check_domain_rho && check_domain_delta){
+    # form 
+    F <- diag(rep(param_new[1],dim))
+    delta_new <- rep(param_new[3],dim)
+    sigma_init <- makeSigma_init(rep(param_new[2],dim),rep(param_new[1],dim))
+    sigma <- makeSigma(rep(param_new[2],dim),dim)
+
+    # then lots of precomputation 
+    sigma_init_U <- chol(sigma_init)
+    sigma_init_L <- t(sigma_init_U)
+    sigma_init_inv <- chol2inv(sigma_init_U)
+    sigma_U <- chol(sigma)
+    sigma_L <- t(sigma_U)
+    sigma_inv <- chol2inv(sigma_U)
+    param_formed_new <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,delta=delta_new)
+    
+    # compute prob
+    param_lprob_new <- param_rw_lprob(param_formed_new,X_current,Y,T)
+
+    if(log(runif(1))<param_lprob_new-param_lprob_current){
+      param_current <- param_new
+      param_lprob_current <- param_lprob_new
+      param_formed_current <- param_formed_new
+    }
+  } # else automatic out and do nothing but return the current values
+
+  return(list(param_new=param_current,param_lprob_new=param_lprob_current,param_formed_new=param_formed_current))
+}
+
+param_update_rw_oat <- function(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim){
+  # propose
+  # param_new <- param_current + 2*rw_scale*(runif(3)-1/2)
+  update <- rw_scale*rnorm(3)
+  for(i in 1:3){
+    param_new <- param_current
+    param_new[i] <- param_new[i] + update[i]
+    
+    check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
+    check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
+    check_domain_delta <- (param_new[3] > 0)
+
+    if(check_domain_phi && check_domain_rho && check_domain_delta){
+      # form 
+      F <- diag(rep(param_new[1],dim))
+      delta_new <- rep(param_new[3],dim)
+      sigma_init <- makeSigma_init(rep(param_new[2],dim),rep(param_new[1],dim))
+      sigma <- makeSigma(rep(param_new[2],dim),dim)
+
+      # then lots of precomputation 
+      sigma_init_U <- chol(sigma_init)
+      sigma_init_L <- t(sigma_init_U)
+      sigma_init_inv <- chol2inv(sigma_init_U)
+      sigma_U <- chol(sigma)
+      sigma_L <- t(sigma_U)
+      sigma_inv <- chol2inv(sigma_U)
+      param_formed_new <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,delta=delta_new)
+      
+      # compute prob
+      param_lprob_new <- param_rw_lprob(param_formed_new,X_current,Y,T)
+
+      if(log(runif(1))<param_lprob_new-param_lprob_current){
+        param_current <- param_new
+        param_lprob_current <- param_lprob_new
+        param_formed_current <- param_formed_new
+      }
+    } # else automatic out and do nothing but return the current values
+  }
+  return(list(param_new=param_current,param_lprob_new=param_lprob_current,param_formed_new=param_formed_current))
+}
+
+lambdaModel2_param_oat <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_scale=c(0.5,0.5,0.5),rho.init=NULL,phi.init=NULL,delta.init=NULL){
+  # note: one simplifying assumption is that we assume the knowledge of model 2 for parameterisation
   # sampling epsilon values instead
   # setup
   require(MASS)
+  if(!is.null(seed)){
+    set.seed(seed)
+  }
   #poisson observation and gaussian latent process 
-  mu_init <- ssm$mu_init
-  sigma_init <- ssm$sigma_init
-  F <- ssm$F
-  delta <- ssm$delta
-  T <- ssm$T
-  sigma_U <- ssm$sigma_U
-  sigma_L <- ssm$sigma_L
   Y <- ssm$Y
   dim <- ssm$dim
+  T <- ssm$T
+  mu_init <- ssm$mu_init # later include in the sampling step 
 
-  # set up for mcmc
-  pre_mu_1 <- solve(F %*% F + solve(sigma_init)%*%sigma) %*% F
-  sigma_1 <- solve(F %*% (solve(sigma) %*% F) + solve(sigma_init))
-  pre_mu_j <- solve(F %*% F + diag(1,dim(F)[1])) %*% F
-  sigma_j <- solve(F %*% (solve(sigma) %*% F) + solve(sigma))
-  pre_mu_T <- F
-  sigma_T <- sigma
-  
-  sigma_1_L <- t(chol(sigma_1))
-  sigma_j_L <- t(chol(sigma_j))
-  sigma_T_L <- t(chol(sigma_T))
-  
-  mus <- list(pre_mu_1,pre_mu_j,pre_mu_T)
-  sigmas_L <- list(sigma_1_L,sigma_j_L,sigma_T_L)
+  if(is.null(phi.init)){
+    phi.init <- runif(1)
+  }
 
-  # for backward compatibility 
-  if(is.null(ssm$sigma_init_L)){
-    print('old ssm object, computing Choleskey for sigma_init')
-    sigma_init_L <- t(chol(sigma_init))
-  } else {
-    sigma_init_L <- ssm$sigma_init_L
+  if(is.null(rho.init)){
+    rho.init <- runif(1)
+  }
+
+  if(is.null(delta.init)){
+    delta.init <- runif(1)
   }
   
-  if(is.null(ssm$sigma_inv)){
-    print('old ssm object, computing inverse for sigma')
-    sigma_inv <- chol2inv(sigma_U)
-  } else {
-    sigma_inv <- ssm$sigma_inv
-  }
-  
-  # X_sample <- array(0,dim=c(N+1,T,dim))
-  X_sample <- array(0,dim=c(6*N+1,T,dim))
+  # parameters to be sampled
+  param_sample <- matrix(logical(0),nrow=N.mcmc.param*2*N+1,ncol=3) # order is phi, rho; delta
+  param_current <- c(phi.init,rho.init,delta.init)
+  param_sample[1,] <- param_current
+
+  # form
+  F <- diag(rep(phi.init,dim))
+  sigma_init <- makeSigma_init(rep(rho.init,dim),rep(phi.init,dim))
+  sigma <- makeSigma(rep(rho.init,dim),dim)
+  # then lots of precomputation 
+  sigma_init_U <- chol(sigma_init)
+  sigma_init_L <- t(sigma_init_U)
+  sigma_init_inv <- chol2inv(sigma_init_U)
+  sigma_U <- chol(sigma)
+  sigma_L <- t(sigma_U)
+  sigma_inv <- chol2inv(sigma_U)
+
+  param_formed_current <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,delta=delta)
+
+  X_sample <- array(logical(0),dim=c(2*N+1,T,dim))
   if(is.null(init)){
-    if(!is.null(seed)){
-      set.seed(seed)
-    }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init)
   } else {
-    if(!is.null(seed)){
-      set.seed(seed)
-    }
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]
   
-  acceptance_rate <- array(0,dim=c(6*N,T,2)) # 2 for measuring only the autocorrelation and shift updates
-  pb <- txtProgressBar(min=0,max=6*N,title="ehmm",style=3)
-  
-  for(i in seq(2,6*N,6)){
-    # Alternate between ehmm and pgmet 
-    # ehmm: forward sequence
+  param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+
+  acceptance_rate <- array(0,dim=c(2*N,T,2)) # 2 for measuring only the autocorrelation and shift updates
+  pb <- txtProgressBar(min=0,max=2*N,title="ehmm",style=3)
+  param_acceptance_rate <- 0
+  for(i in seq(2,2*N,2)){
+    # do N.mcmc.param fix paramter updates between each latent sampling
+    # latent: forward sequence
     pool_out <- forward_pool(X_current,Y,T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,delta)
     
     X_pool <- pool_out$X_pool
@@ -347,7 +411,19 @@ ehmmModel2_combined <- function(ssm,N,L,L_particles,es,N.mcmc=10,init=NULL,seed=
     X_current <- backward_sampling(X_pool,L,T,dim,F,sigma_inv)
     X_sample[i,,] <- X_current
     
-    # ehmm: reversed sequence
+    # parameter sampling 1
+    start_index <- N.mcmc.param*(i-1)-(N.mcmc.param-1)
+    for(j in 1:N.mcmc.param){
+      param_update_out <- param_update_rw_oat(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
+      if(any(param_current != param_update_out$param_new)){
+        param_acceptance_rate <- param_acceptance_rate + 1
+      }
+      param_formed_current <- param_update_out$param_formed_new
+      param_current <- param_update_out$param_new
+      param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
+    }
+    # latent: reversed sequence
     pool_out <- forward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,delta)
 
     X_pool <- pool_out$X_pool
@@ -355,26 +431,23 @@ ehmmModel2_combined <- function(ssm,N,L,L_particles,es,N.mcmc=10,init=NULL,seed=
 
     X_current[seq(T,1,-1),] <- backward_sampling(X_pool,L,T,dim,F,sigma_inv)
     X_sample[i+1,,] <- X_current
-
-    # pgmet: step 1
-    forward_results <- forward_step(X_current,Y,T,L_particles,dim,F,sigma_U,mu_init,sigma_init,delta)
-    X_current <- backward_step(forward_results,T,L_particles,F,sigma_inv)
-    X_sample[i+2,,] <- X_current
-
-    # pgmet: step 2
-    X_current <- mcmc_step(X_current,Y,N.mcmc,es,T,dim,mus,sigmas_L,delta,thin.factor=1)
-    X_sample[i+3,,] <- X_current
-
-    # pgmet: step 3 
-    forward_results <- forward_step(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L_particles,dim,F,sigma_U,mu_init,sigma_init,delta)
-    X_current[seq(T,1,-1),] <- backward_step(forward_results,T,L_particles,F,sigma_inv) # reverse the index when setting
-    X_sample[i+4,,] <- X_current 
-
-    # pgmet: step 4 
-    X_current <- mcmc_step(X_current,Y,N.mcmc,es,T,dim,mus,sigmas_L,delta,thin.factor=1)
-    X_sample[i+5,,] <- X_current
+    
+    # parameter sampling2 
+    start_index <- N.mcmc.param*i-(N.mcmc.param-1)
+    for(j in 1:N.mcmc.param){
+      param_update_out <- param_update_rw_oat(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
+      if(any(param_current != param_update_out$param_new)){
+        param_acceptance_rate <- param_acceptance_rate + 1
+      }
+      param_formed_current <- param_update_out$param_formed_new
+      param_current <- param_update_out$param_new
+      param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
+    }
 
     setTxtProgressBar(pb, i)
   }
-  return(list(X_sample=X_sample[-1,,],N=N,L=L,L_particles=L_particles,es=es,init=init,seed=seed,X_pool=X_pool,acceptance_rate=acceptance_rate))
+  param_acceptance_rate <- param_acceptance_rate/(N.mcmc.param*2*N)
+  return(list(X_sample=X_sample[-1,,],param_sample=param_sample,N=N,L=L,init=init,
+    seed=seed,X_pool=X_pool,acceptance_rate=acceptance_rate,param_acceptance_rate=param_acceptance_rate))
 }

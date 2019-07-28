@@ -1,3 +1,4 @@
+setMKLthreads(2)
 load('./data/model2_poisson4.RData')
 load('./data/model2_poisson4_env.RData')
 

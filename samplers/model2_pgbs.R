@@ -76,6 +76,9 @@ pgbsModel2 <- function(ssm,N,L,init=NULL,seed=NULL){
     }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init)
   } else {
+    if(!is.null(seed)){
+      set.seed(seed)
+    }
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]

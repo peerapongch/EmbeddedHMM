@@ -1,14 +1,15 @@
+setMKLthreads(2)
 load('./data/model2_poisson4.RData')
 load('./data/model2_poisson4_env.RData')
 
 source('../../samplers/model2_pgmet.R')
 N <- 250
 es <- c(0.3,1)
-L <- 2000
+L <- 5000
 N.mcmc <- 50
 seed <- 1
 system.time(
-  pgmet_out <- pgmetModel2(ssm_poisson,N,L,seed=seed)
+  pgmet_out <- pgmetModel2(ssm_poisson,N,L,es,N.mcmc=N.mcmc,seed=seed)
 )
 save(pgmet_out,file='./data/poisson4_pgmet.RData')
 

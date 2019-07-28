@@ -96,7 +96,11 @@ pgmetModel2 <- function(ssm,N,L,es,N.mcmc=10,init=NULL,seed=NULL,return.weight=F
       set.seed(seed)
     }
     X_sample[1,,] <- mvrnorm(T,mu_init,sigma_init)
+    print(X_sample[1,1,])
   } else {
+  	if(!is.null(seed)){
+      set.seed(seed)
+    }
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]
