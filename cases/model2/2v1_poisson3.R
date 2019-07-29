@@ -3,23 +3,23 @@ load('./data/model2_poisson3.RData')
 load('./data/model2_poisson3_env.RData')
 
 source('../../samplers/model2_lambda_param_2.R')
-N <- 9000
+N <- 1000
 L <- 80
 N.mcmc.param <- 20
 seed <- 1 
 rw_scale <- c(0.1,0.1)
 checkpoint.name <- './data/checkpoint_poisson3_2v1.RData'
 system.time(
-  lambda_out <- lambdaModel2_param2(ssm_poisson,N,L,N.mcmc.param=N.mcmc.param,
+  lambda_out <- lambdaModel2_param(ssm_poisson,N,L,N.mcmc.param=N.mcmc.param,
   	seed=seed,rw_scale=rw_scale,checkpoint.name=checkpoint.name)
 )
 
 save(lambda_out,file='./data/poisson3_lambda_param_2_v1.RData')
 
-# load(file='./data/poisson3_lambda_param_2_v1.RData')
-# library(coda)
-# x.param <- as.mcmc(lambda_out$param_sample)
-# plot(x.param)
+load(file='./data/poisson3_lambda_param_2_v1.RData')
+library(coda)
+x.param <- as.mcmc(lambda_out$param_sample)
+plot(x.param)
 
 # # load('./data/poisson3_lambda_param.RData')
 # library(coda)

@@ -249,25 +249,25 @@ param_rw_lprob <- function(param_formed,X_current,Y,T){
   X_current_t <- t(X_current)
   mu <- phi * X_current_t
   diff <- X_current_t[,2:T] - mu[,1:(T-1)]
-  # # p(x_1:T|param)
-  # lprob1 <- -1/2*(log(det(sigma_init)) + (T-1)*log(det(sigma)) + t(X_current[1,])%*%sigma_init_inv%*%X_current[1,] + sum(diag(t(diff)%*%sigma_inv%*%diff)))
-  # # print(lprob1)
-  # # p(y_1:T|x_1:T,param)
+  # p(x_1:T|param)
+  lprob1 <- -1/2*(log(det(sigma_init)) + (T-1)*log(det(sigma)) + t(X_current[1,])%*%sigma_init_inv%*%X_current[1,] + sum(diag(t(diff)%*%sigma_inv%*%diff)))
+  # print(lprob1)
+  # p(y_1:T|x_1:T,param)
 
   lambda <- as.vector(delta*abs(t(X_current)))
+  # print(delta)
+  # print(lambda)
   lprob2 <- sum(dpois(as.vector(t(Y)),lambda,log=TRUE))
   # print(dpois(as.vector(t(Y)),lambda,log=TRUE))
 
-  return(lprob2)
+  return(lprob1+lprob2)
 }
 
-param_update_rw <- function(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim,delta){
+param_update_rw <- function(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim){
   # propose
   # param_new <- param_current + 2*rw_scale*(runif(3)-1/2)
-  param_new <- param_current + rw_scale*rnorm(1)
-  # print('param updates')
-  # print(param_current)
-  # print(param_new)
+  param_new <- param_current + rw_scale*rnorm(3)
+  param_new[1:2] <- c(0.9,0.7)
   # for(l in 1:(len-3)){
   #   new <- -1
   #   while(new>1 || new<0){
@@ -279,22 +279,30 @@ param_update_rw <- function(param_current,param_formed_current,param_lprob_curre
   #   param_new[l] <- runif(1,param_current[l]-rw_const,param_current[l]+rw_const)
   # }
 
-  # check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
-  # check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
-  check_domain_delta <- param_new[1] > 0
+  check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
+  check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
+  check_domain_delta <- (param_new[3] > 0)
 
-  # if(check_domain_phi && check_domain_rho && check_domain_delta){
-  if(check_domain_delta){
+  if(check_domain_phi && check_domain_rho && check_domain_delta){
+    # form 
+    F <- diag(rep(param_new[1],dim))
+    delta_new <- rep(param_new[3],dim)
+    sigma_init <- makeSigma_init(rep(param_new[2],dim),rep(param_new[1],dim))
+    sigma <- makeSigma(rep(param_new[2],dim),dim)
 
-    param_formed_new <- param_formed_current
-    param_formed_new$delta <- param_new[1]
+    # then lots of precomputation 
+    sigma_init_U <- chol(sigma_init)
+    sigma_init_L <- t(sigma_init_U)
+    sigma_init_inv <- chol2inv(sigma_init_U)
+    sigma_U <- chol(sigma)
+    sigma_L <- t(sigma_U)
+    sigma_inv <- chol2inv(sigma_U)
+    param_formed_new <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,
+      sigma_init_U = sigma_init_U, sigma_init_L = sigma_init_L, sigma_U = sigma_U, sigma_L = sigma_L,
+      delta=delta_new)
     # compute prob
     param_lprob_new <- param_rw_lprob(param_formed_new,X_current,Y,T)
-    # print('hastings ratio')
-    # print(exp(param_lprob_new-param_lprob_current))
-    # print(paste("log new :",param_lprob_new))
-    # print(paste("log current :",param_lprob_current))
-    # print("----------")
+
     if(log(runif(1))<param_lprob_new-param_lprob_current){
       param_current <- param_new
       param_lprob_current <- param_lprob_new
@@ -305,7 +313,7 @@ param_update_rw <- function(param_current,param_formed_current,param_lprob_curre
   return(list(param_new=param_current,param_lprob_new=param_lprob_current,param_formed_new=param_formed_current))
 }
 
-lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_scale=c(0.5),rho.init=NULL,phi.init=NULL,delta.init=NULL,checkpoint.name=NULL){
+lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_scale=c(0.5,0.5,0.5),rho.init=NULL,phi.init=NULL,delta.init=NULL,checkpoint.name=NULL){
   # note: one simplifying assumption is that we assume the knowledge of model 2 for parameterisation
   # sampling epsilon values instead
   # setup
@@ -318,48 +326,36 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
   dim <- ssm$dim
   T <- ssm$T
   mu_init <- ssm$mu_init # later include in the sampling step 
-  # delta <- ssm$delta 
-  mu_init <- ssm$mu_init
-  sigma_init <- ssm$sigma_init
-  F <- ssm$F
-  delta <- ssm$delta
-  T <- ssm$T
-  sigma_U <- ssm$sigma_U
-  sigma_L <- ssm$sigma_L
-  Y <- ssm$Y
-  dim <- ssm$dim
-  # for backward compatibility 
-  if(is.null(ssm$sigma_init_L)){
-    print('old ssm object, computing Choleskey for sigma_init')
-    sigma_init_L <- t(chol(sigma_init))
-  } else {
-    sigma_init_L <- ssm$sigma_init_L
-  }
-  
-  if(is.null(ssm$sigma_inv)){
-    print('old ssm object, computing inverse for sigma')
-    sigma_inv <- chol2inv(sigma_U)
-  } else {
-    sigma_inv <- ssm$sigma_inv
-  }  
-  sigma_init_U <- chol(sigma_init)
-  sigma_init_L <- t(sigma_init_U)
-  sigma_init_inv <- chol2inv(sigma_init_U)
-  # if(is.null(phi.init)){
-  #   phi.init <- runif(1)
-  # }
 
-  # if(is.null(rho.init)){
-  #   rho.init <- runif(1)
-  # }
+  if(is.null(phi.init)){
+    phi.init <- runif(1)
+  }
+
+  if(is.null(rho.init)){
+    rho.init <- runif(1)
+  }
 
   if(is.null(delta.init)){
     delta.init <- runif(1)
   }
   
-  param_sample <- matrix(logical(0),nrow=2*N+1,ncol=1) # order is phi, rho; delta
-  param_current <- c(delta.init)
+  # parameters to be sampled
+  param_sample <- matrix(logical(0),nrow=2*N+1,ncol=3) # order is phi, rho; delta
+  param_current <- c(phi.init,rho.init,delta.init)
+  print(param_current)
   param_sample[1,] <- param_current
+
+  # form
+  F <- diag(rep(phi.init,dim))
+  sigma_init <- makeSigma_init(rep(rho.init,dim),rep(phi.init,dim))
+  sigma <- makeSigma(rep(rho.init,dim),dim)
+  # then lots of precomputation 
+  sigma_init_U <- chol(sigma_init)
+  sigma_init_L <- t(sigma_init_U)
+  sigma_init_inv <- chol2inv(sigma_init_U)
+  sigma_U <- chol(sigma)
+  sigma_L <- t(sigma_U)
+  sigma_inv <- chol2inv(sigma_U)
 
   param_formed_current <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,
     sigma_init_U = sigma_init_U, sigma_init_L = sigma_init_L, sigma_U = sigma_U, sigma_L = sigma_L,
@@ -372,8 +368,6 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
     X_sample[1,,] <- init 
   }
   X_current <- X_sample[1,,]
-  
-  # param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
 
   acceptance_rate <- array(0,dim=c(2*N,T,2)) # 2 for measuring only the autocorrelation and shift updates
   pb <- txtProgressBar(min=0,max=2*N,title="ehmm",style=3)
@@ -397,7 +391,7 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
     # parameter sampling 1
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
     for(j in 1:N.mcmc.param){
-      param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim,delta)
+      param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
         param_acceptance_rate <- param_acceptance_rate + 1
       }
@@ -418,7 +412,7 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
     sigma_U <- param_formed_current$sigma_U
     sigma_L <- param_formed_current$sigma_L
     sigma_inv <- param_formed_current$sigma_inv
-
+    
     # latent: reversed sequence
     pool_out <- forward_pool(X_current[seq(T,1,-1),],Y[seq(T,1,-1),],T,L,dim,mu_init,sigma_init_L,sigma_L,sigma_U,F,sigma_inv,delta)
 
@@ -428,10 +422,10 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
     X_current[seq(T,1,-1),] <- backward_sampling(X_pool,L,T,dim,F,sigma_inv)
     X_sample[i+1,,] <- X_current
     
-    # parameter sampling2 
+    # parameter sampling 2 
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
     for(j in 1:N.mcmc.param){
-      param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim,delta)
+      param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
         param_acceptance_rate <- param_acceptance_rate + 1
       }
@@ -452,7 +446,7 @@ lambdaModel2_param3 <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_s
     sigma_U <- param_formed_current$sigma_U
     sigma_L <- param_formed_current$sigma_L
     sigma_inv <- param_formed_current$sigma_inv
-
+    
     setTxtProgressBar(pb, i)
   }
   param_acceptance_rate <- param_acceptance_rate/(2*N)

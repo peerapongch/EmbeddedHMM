@@ -251,14 +251,10 @@ param_rw_lprob <- function(param_formed,X_current,Y,T){
   diff <- X_current_t[,2:T] - mu[,1:(T-1)]
   # p(x_1:T|param)
   lprob1 <- -1/2*(log(det(sigma_init)) + (T-1)*log(det(sigma)) + t(X_current[1,])%*%sigma_init_inv%*%X_current[1,] + sum(diag(t(diff)%*%sigma_inv%*%diff)))
-  # print(lprob1)
-  # p(y_1:T|x_1:T,param)
 
+  # p(y_1:T|x_1:T,param)
   lambda <- as.vector(delta*abs(t(X_current)))
-  # print(delta)
-  # print(lambda)
   lprob2 <- sum(dpois(as.vector(t(Y)),lambda,log=TRUE))
-  # print(dpois(as.vector(t(Y)),lambda,log=TRUE))
 
   return(lprob1+lprob2)
 }
@@ -267,17 +263,6 @@ param_update_rw <- function(param_current,param_formed_current,param_lprob_curre
   # propose
   # param_new <- param_current + 2*rw_scale*(runif(3)-1/2)
   param_new <- param_current + rw_scale*rnorm(3)
-
-  # for(l in 1:(len-3)){
-  #   new <- -1
-  #   while(new>1 || new<0){
-  #     new <- runif(1,param_current[l]-rw_const,param_current[l]+rw_const) 
-  #   }
-  #   param_new[l] <- new
-  # }
-  # for(l in (len-2):len){
-  #   param_new[l] <- runif(1,param_current[l]-rw_const,param_current[l]+rw_const)
-  # }
 
   check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
   check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
@@ -330,17 +315,15 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
   if(is.null(phi.init)){
     phi.init <- runif(1)
   }
-
   if(is.null(rho.init)){
     rho.init <- runif(1)
   }
-
   if(is.null(delta.init)){
     delta.init <- runif(1)
   }
   
   # parameters to be sampled
-  param_sample <- matrix(logical(0),nrow=2*N+1,ncol=3) # order is phi, rho; delta
+  param_sample <- matrix(logical(0),nrow=N.mcmc.param*2*N+1,ncol=3) # order is phi, rho; delta
   param_current <- c(phi.init,rho.init,delta.init)
   print(param_current)
   param_sample[1,] <- param_current
@@ -377,6 +360,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
       if((i == N/2) || (i == N) || (i == N/4*3)){
         save(X_sample,param_sample,file=checkpoint.name)
       }
+      # rw_scale <- rw_scale/2
     }
     # do N.mcmc.param fix paramter updates between each latent sampling
     # latent: forward sequence
@@ -390,6 +374,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
     
     # parameter sampling 1
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i-1) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -398,8 +383,9 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i,] <- param_current
+    
     # update parameters
     delta <- param_formed_current$delta
     c <- param_formed_current$c
@@ -424,6 +410,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
     
     # parameter sampling 2 
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -432,8 +419,8 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i+1,] <- param_current
     # update parameters
     delta <- param_formed_current$delta
     c <- param_formed_current$c
