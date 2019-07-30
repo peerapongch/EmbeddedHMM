@@ -19,7 +19,7 @@ generate_model2_observation <- function(T,dim,X,delta){
   abs_X <- abs(X)
   lambda <- t(apply(abs_X,MARGIN=1,FUN=function(x){x*delta}))
   for(t in 1:T){
-    Y[t,] <- rpois(dim,lambda)
+    Y[t,] <- rpois(dim,lambda[t,])
   }
   return(Y)
 }
@@ -37,7 +37,7 @@ generate_model2 <- function(T,dim,mu_init,sigma_init,F,G,Q,delta,seed){
   sigma_init_L <- t(sigma_init_U)
   sigma_init_inv <- chol2inv(sigma_init_U)
   return(list(dim=dim,T=T,X=X,Y=Y,mu_init=mu_init,sigma_init=sigma_init,
-              F=F,G=G,Q=Q,c=c,delta=delta,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L,
+              F=F,G=G,Q=Q,delta=delta,sigma=sigma,sigma_U=sigma_U,sigma_L=sigma_L,
               sigma_inv=sigma_inv,sigma_init_U=sigma_init_U,sigma_init_L=sigma_init_L,
               sigma_init_inv=sigma_init_inv, seed=seed))
 }

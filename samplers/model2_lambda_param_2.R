@@ -242,7 +242,6 @@ param_rw_lprob <- function(param_formed,X_current,Y,T){
   phi <- diag(F)
   sigma_init <- param_formed$sigma_init
   sigma <- param_formed$sigma
-  # then lots of precomputation 
   sigma_init_inv <- param_formed$sigma_init_inv
   sigma_inv <- param_formed$sigma_inv
 
@@ -251,14 +250,21 @@ param_rw_lprob <- function(param_formed,X_current,Y,T){
   diff <- X_current_t[,2:T] - mu[,1:(T-1)]
   # p(x_1:T|param)
   lprob1 <- -1/2*(log(det(sigma_init)) + (T-1)*log(det(sigma)) + t(X_current[1,])%*%sigma_init_inv%*%X_current[1,] + sum(diag(t(diff)%*%sigma_inv%*%diff)))
+  # print("optimised")
   # print(lprob1)
-  # p(y_1:T|x_1:T,param)
 
+  # # might this be wrong? --> try the unoptimised version
+  # lprob1 <- dmvnorm(X_current[1,],c(0,0,0),sigma_init,log=TRUE)
+  # print(lprob1)
+  # for(t in 2:500){
+  #   lprob1 <- lprob1 + dmvnorm(X_current[t,],mu[,t-1],sigma,log=TRUE)
+  # }
+  # print("unoptimised")
+  # print(lprob1)
+
+  # p(y_1:T|x_1:T,param)
   lambda <- as.vector(delta*abs(t(X_current)))
-  # print(delta)
-  # print(lambda)
   lprob2 <- sum(dpois(as.vector(t(Y)),lambda,log=TRUE))
-  # print(dpois(as.vector(t(Y)),lambda,log=TRUE))
 
   return(lprob1+lprob2)
 }
@@ -266,45 +272,40 @@ param_rw_lprob <- function(param_formed,X_current,Y,T){
 param_update_rw <- function(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim){
   # propose
   # param_new <- param_current + 2*rw_scale*(runif(3)-1/2)
+  # param_new <- param_current + rw_scale*rnorm(3)
+  
   param_new <- param_current + rw_scale*rnorm(3)
-  param_new[3] <- 0.8
-  # for(l in 1:(len-3)){
-  #   new <- -1
-  #   while(new>1 || new<0){
-  #     new <- runif(1,param_current[l]-rw_const,param_current[l]+rw_const) 
-  #   }
-  #   param_new[l] <- new
-  # }
-  # for(l in (len-2):len){
-  #   param_new[l] <- runif(1,param_current[l]-rw_const,param_current[l]+rw_const)
-  # }
-
+  param_new[3] <- c(0.8)
   check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
   check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
-  check_domain_delta <- (param_new[3] > 0)
-
-  if(check_domain_phi && check_domain_rho && check_domain_delta){
+  # check_domain_delta <- (param_new[3] > 0)
+  
+  if(check_domain_phi && check_domain_rho){
     # form 
     F <- diag(rep(param_new[1],dim))
     delta_new <- rep(param_new[3],dim)
-    sigma_init <- makeSigma_init(rep(param_new[2],dim),rep(param_new[1],dim))
-    sigma <- makeSigma(rep(param_new[2],dim),dim)
+    sigma_init <- makeSigma_init(param_new[2],rep(param_new[1],dim))
+    sigma <- makeSigma(param_new[2],dim)
 
-    # then lots of precomputation 
     sigma_init_U <- chol(sigma_init)
     sigma_init_L <- t(sigma_init_U)
     sigma_init_inv <- chol2inv(sigma_init_U)
     sigma_U <- chol(sigma)
     sigma_L <- t(sigma_U)
     sigma_inv <- chol2inv(sigma_U)
-    param_formed_new <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,
-      sigma_init_U = sigma_init_U, sigma_init_L = sigma_init_L, sigma_U = sigma_U, sigma_L = sigma_L,
+    param_formed_new <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,sigma_init_U = sigma_init_U, sigma_init_L = sigma_init_L, sigma_U = sigma_U, sigma_L = sigma_L,
       delta=delta_new)
+    
     # compute prob
     param_lprob_new <- param_rw_lprob(param_formed_new,X_current,Y,T)
-
-    if(log(runif(1))<param_lprob_new-param_lprob_current){
+    # print('hastings old/new:')
+    # print(param_lprob_current[1])
+    # print(param_lprob_new[1])
+    # print('---')
+    if(log(runif(1))<(param_lprob_new-param_lprob_current)){
+      # print('ACCEPTED!!')
       param_current <- param_new
+      # print(param_current)
       param_lprob_current <- param_lprob_new
       param_formed_current <- param_formed_new
     }
@@ -330,25 +331,24 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
   if(is.null(phi.init)){
     phi.init <- runif(1)
   }
-
   if(is.null(rho.init)){
     rho.init <- runif(1)
   }
-
   if(is.null(delta.init)){
-    delta.init <- runif(1)
+    delta.init <- 0.8
   }
   
   # parameters to be sampled
-  param_sample <- matrix(logical(0),nrow=2*N+1,ncol=3) # order is phi, rho; delta
+  param_sample <- matrix(logical(0),nrow=N.mcmc.param*2*N+1,ncol=3) # order is phi, rho; delta
   param_current <- c(phi.init,rho.init,delta.init)
   print(param_current)
   param_sample[1,] <- param_current
 
   # form
+  delta <- delta.init
   F <- diag(rep(phi.init,dim))
-  sigma_init <- makeSigma_init(rep(rho.init,dim),rep(phi.init,dim))
-  sigma <- makeSigma(rep(rho.init,dim),dim)
+  sigma_init <- makeSigma_init(rho.init,rep(phi.init,dim))
+  sigma <- makeSigma(rho.init,dim)
   # then lots of precomputation 
   sigma_init_U <- chol(sigma_init)
   sigma_init_L <- t(sigma_init_U)
@@ -358,8 +358,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
   sigma_inv <- chol2inv(sigma_U)
 
   param_formed_current <- list(F=F,sigma_init=sigma_init,sigma=sigma,sigma_init_inv=sigma_init_inv,sigma_inv=sigma_inv,
-    sigma_init_U = sigma_init_U, sigma_init_L = sigma_init_L, sigma_U = sigma_U, sigma_L = sigma_L,
-    delta=delta)
+    sigma_init_U=sigma_init_U, sigma_init_L=sigma_init_L, sigma_U=sigma_U, sigma_L=sigma_L, delta=delta)
 
   X_sample <- array(logical(0),dim=c(2*N+1,T,dim))
   if(is.null(init)){
@@ -374,7 +373,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
   param_acceptance_rate <- 0
   for(i in seq(2,2*N,2)){
     if(!is.null(checkpoint.name)){
-      if((i == N/2) || (i == N) || (i == N/4*3)){
+      if(i == N){
         save(X_sample,param_sample,file=checkpoint.name)
       }
     }
@@ -390,6 +389,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
     
     # parameter sampling 1
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i-1) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -398,11 +398,11 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i,] <- param_current
+    
     # update parameters
     delta <- param_formed_current$delta
-    c <- param_formed_current$c
     F <- param_formed_current$F
     sigma_init <- param_formed_current$sigma_init
     sigma <- param_formed_current$sigma
@@ -424,6 +424,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
     
     # parameter sampling 2 
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -432,11 +433,10 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i+1,] <- param_current
     # update parameters
     delta <- param_formed_current$delta
-    c <- param_formed_current$c
     F <- param_formed_current$F
     sigma_init <- param_formed_current$sigma_init
     sigma <- param_formed_current$sigma
@@ -449,7 +449,7 @@ lambdaModel2_param <- function(ssm,N,L,N.mcmc.param=20,init=NULL,seed=NULL,rw_sc
     
     setTxtProgressBar(pb, i)
   }
-  param_acceptance_rate <- param_acceptance_rate/(2*N)
+  param_acceptance_rate <- param_acceptance_rate/(N.mcmc.param*2*N)
   return(list(X_sample=X_sample[-1,,],param_sample=param_sample,N=N,L=L,init=init,
     seed=seed,X_pool=X_pool,acceptance_rate=acceptance_rate,param_acceptance_rate=param_acceptance_rate))
 }

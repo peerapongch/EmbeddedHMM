@@ -1,26 +1,29 @@
+setwd("C:/Users/peera/Documents/EmbeddedHMM/cases/model2")
+rm(list=ls())
 setMKLthreads(2)
-load('./data/model2_poisson3.RData')
-load('./data/model2_poisson3_env.RData')
+load('./data/model2_poisson3_seed4.RData')
+load('./data/model2_poisson3_seed4_env.RData')
 
 source('../../samplers/model2_lambda_param_3.R')
-N <- 1000
+N <- 100
 L <- 80
-N.mcmc.param <- 20
+N.mcmc.param <- 10
 seed <- 1 
-rw_scale <- c(0.1)
+rw_scale <- c(0.1,0.1,0.01)
 checkpoint.name <- './data/checkpoint_poisson3_3v1.RData'
 system.time(
-  lambda_out <- lambdaModel2_param(ssm_poisson,N,L,N.mcmc.param=N.mcmc.param,
+  lambda_out <- lambdaModel2_param(ssm_poisson,N,L,N.mcmc.param=N.mcmc.param,init=ssm_poisson$X,
   	seed=seed,rw_scale=rw_scale,checkpoint.name=checkpoint.name)
 )
 
-save(lambda_out,file='./data/poisson3_lambda_param_3_v1.RData')
+# save(lambda_out,file='./data/poisson3_lambda_param_3_v1.RData')
 
-load('./data/poisson3_lambda_param_3_v1.RData')
+# load('./data/poisson3_lambda_param_3_v1.RData')
 library(coda)
 x.param <- as.mcmc(lambda_out$param_sample)
 plot(x.param)
 
+apply(lambda_out$param_sample,MARGIN=2,FUN=mean)
 
 # # load('./data/poisson3_lambda_param.RData')
 # library(coda)

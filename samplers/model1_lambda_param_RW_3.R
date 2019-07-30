@@ -306,11 +306,11 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
   }
 
   if(is.null(c.init)){
-    c.init <- runif(1)
+    c.init <- rnorm(1)
   }  
 
   # parameters to be sampled
-  param_sample <- matrix(logical(0),nrow=2*N+1,ncol=4) # order is phi, rho; delta
+  param_sample <- matrix(logical(0),nrow=N.mcmc.param*2*N+1,ncol=4) # order is phi, rho; delta
   param_current <- c(phi.init,rho.init,delta.init,c.init)
   print(param_current)
   param_sample[1,] <- param_current
@@ -363,6 +363,7 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
 
     # parameter sampling 1
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i-1) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -371,8 +372,9 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i,] <- param_current
+
     # update parameters
     delta <- param_formed_current$delta
     c <- param_formed_current$c
@@ -397,6 +399,7 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
 
     # parameter sampling 2 
     param_lprob_current <- param_rw_lprob(param_formed_current,X_current,Y,T)
+    start_index <- N.mcmc.param*(i) - (N.mcmc.param-1)
     for(j in 1:N.mcmc.param){
       param_update_out <- param_update_rw(param_current,param_formed_current,param_lprob_current,X_current,Y,rw_scale,dim)
       if(any(param_current != param_update_out$param_new)){
@@ -405,8 +408,9 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
       param_formed_current <- param_update_out$param_formed_new
       param_current <- param_update_out$param_new
       param_lprob_current <- param_update_out$param_lprob_new
+      param_sample[start_index+j,] <- param_current
     }
-    param_sample[i+1,] <- param_current
+
     # update parameters
     delta <- param_formed_current$delta
     c <- param_formed_current$c
@@ -422,6 +426,7 @@ lambdaModel1_param <- function(ssm,N,L,init=NULL,seed=NULL,N.mcmc.param=20,rw_sc
     
     setTxtProgressBar(pb, i)
   }
-  return(list(X_sample=X_sample[-1,,],param_sample=param_sample,N=N,L=L,init=init,seed=seed,X_pool=X_pool,
-              acceptance_rate=acceptance_rate,param_acceptance_rate=param_acceptance_rate))
+  param_acceptance_rate <- param_acceptance_rate/(N.mcmc.param*2*N)
+
+  return(list(X_sample=X_sample[-1,,],param_sample=param_sample,N=N,L=L,init=init,seed=seed,X_pool=X_pool,acceptance_rate=acceptance_rate,param_acceptance_rate=param_acceptance_rate))
 }
