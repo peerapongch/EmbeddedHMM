@@ -243,7 +243,7 @@ param_update_rw <- function(param_current,param_formed_current,param_lprob_curre
   check_domain_phi <- (param_new[1] > 0) && (param_new[1] < 1)
   check_domain_rho <- (param_new[2] > 0) && (param_new[2] < 1)
   check_domain_delta <- (param_new[3] > 0)
-  check_domain_c <- (param_new[4] > -1) && (param_new[4] < 1)
+  check_domain_c <- (param_new[4] > -10) && (param_new[4] < 10)
 
   if(check_domain_phi && check_domain_rho && check_domain_delta && check_domain_c){
     # form 
